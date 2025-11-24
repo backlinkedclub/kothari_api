@@ -21,13 +21,20 @@ module KothariAPI
       end
     end
 
-    # JSON serialization - serialize all instance variables
+    # JSON serialization - serialize all instance variables except empty errors
     def to_json(json : JSON::Builder)
       json.object do
         {% begin %}
           {% ivars = @type.instance_vars %}
           {% for ivar in ivars %}
-            json.field({{ivar.name.stringify}}, @{{ivar.name.id}})
+            {% if ivar.name.stringify == "errors" %}
+              # Only include errors field if it has actual errors
+              if !@errors.empty?
+                json.field({{ivar.name.stringify}}, @{{ivar.name.id}})
+              end
+            {% else %}
+              json.field({{ivar.name.stringify}}, @{{ivar.name.id}})
+            {% end %}
           {% end %}
         {% end %}
       end

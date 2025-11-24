@@ -38,42 +38,42 @@ def show_intro(command_name : String)
   # The original pattern has 6 lines, each 59 chars wide (including borders)
   # We'll create a similar pattern for the command name
   
-  # ASCII art patterns for each character (6 lines each, consistent width ~8 chars)
-  # All patterns are designed to be clearly readable and properly aligned
+  # Professional box-drawing ASCII art (6 lines each, consistent width 7 chars)
+  # Each letter is clearly recognizable and properly formed
   ascii_chars = {
-    'A' => [" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
-    'B' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██████╔╝", "╚═════╝ "],
-    'C' => [" ██████╗", "██╔════╝", "██║     ", "██║     ", "╚██████╗", " ╚═════╝"],
-    'D' => ["██████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "],
-    'E' => ["██████╗ ", "██╔═══╝ ", "█████╗  ", "██╔══╝  ", "██████╗ ", "╚═════╝ "],
-    'F' => ["██████╗ ", "██╔═══╝ ", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     "],
-    'G' => [" ██████╗", "██╔════╝", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
-    'H' => ["██╗  ██╗", "██║  ██║", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
-    'I' => ["██████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "],
-    'J' => ["     ██╗", "     ██║", "     ██║", "██╗  ██║", "╚█████╔╝", " ╚════╝"],
-    'K' => ["██╗  ██╗", "██║ ██╔╝", "█████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
-    'L' => ["██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝"],
-    'M' => ["███╗   ███╗", "████╗ ████║", "██╔████╔██║", "██║╚██╔╝██║", "██║ ╚═╝ ██║", "╚═╝     ╚═╝"],
-    'N' => ["███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝"],
-    'O' => [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "],
-    'P' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔═══╝ ", "██║     ", "╚═╝     "],
-    'Q' => [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║▄▄ ██║", "╚██████╔╝", " ╚═▀▀▀═╝ "],
-    'R' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
-    'S' => ["███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"],
-    'T' => ["████████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "],
-    'U' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
-    'V' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚═══╝ "],
-    'W' => ["██╗    ██╗", "██║    ██║", "██║ █╗ ██║", "██║███╗██║", "╚███╔███╔╝", " ╚══╝╚══╝ "],
-    'X' => ["██╗  ██╗", "╚██╗██╔╝", " ╚███╔╝ ", " ██╔██╗ ", "██╔╝ ██╗", "╚═╝  ╚═╝"],
-    'Y' => ["██╗   ██╗", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚██╔╝  ", "   ██║   ", "   ╚═╝   "],
-    'Z' => ["███████╗", "╚══██╔══╝", "   ██║   ", "  ██╔╝   ", " ██╔╝    ", "╚═╝      "],
+    'A' => [" ████  ", "██  ██ ", "██████ ", "██  ██ ", "██  ██ ", "██  ██ "],
+    'B' => ["█████  ", "██  ██ ", "█████  ", "██  ██ ", "██  ██ ", "█████  "],
+    'C' => [" █████ ", "██     ", "██     ", "██     ", "██     ", " █████ "],
+    'D' => ["█████  ", "██  ██ ", "██  ██ ", "██  ██ ", "██  ██ ", "█████  "],
+    'E' => ["██████ ", "██     ", "█████  ", "██     ", "██     ", "██████ "],
+    'F' => ["██████ ", "██     ", "█████  ", "██     ", "██     ", "██     "],
+    'G' => [" █████ ", "██     ", "██     ", "██  ███", "██   ██", " █████ "],
+    'H' => ["██  ██ ", "██  ██ ", "██████ ", "██  ██ ", "██  ██ ", "██  ██ "],
+    'I' => ["██████ ", "  ██   ", "  ██   ", "  ██   ", "  ██   ", "██████ "],
+    'J' => ["██████ ", "    ██ ", "    ██ ", "    ██ ", "██  ██ ", " ████  "],
+    'K' => ["██  ██ ", "██ ██  ", "████   ", "██ ██  ", "██ ██  ", "██  ██ "],
+    'L' => ["██     ", "██     ", "██     ", "██     ", "██     ", "██████ "],
+    'M' => ["██   ██", "███ ███", "███████", "██ █ ██", "██   ██", "██   ██"],
+    'N' => ["██   ██", "███  ██", "████ ██", "██ ████", "██  ███", "██   ██"],
+    'O' => [" █████ ", "██   ██", "██   ██", "██   ██", "██   ██", " █████ "],
+    'P' => ["█████  ", "██  ██ ", "██  ██ ", "█████  ", "██     ", "██     "],
+    'Q' => [" █████ ", "██   ██", "██   ██", "██ █ ██", "██  ███", " ██████"],
+    'R' => ["█████  ", "██  ██ ", "██  ██ ", "█████  ", "██  ██ ", "██   ██"],
+    'S' => [" ██████", "██     ", "██     ", " █████ ", "     ██", "██████ "],
+    'T' => ["███████", "   ██  ", "   ██  ", "   ██  ", "   ██  ", "   ██  "],
+    'U' => ["██   ██", "██   ██", "██   ██", "██   ██", "██   ██", " █████ "],
+    'V' => ["██   ██", "██   ██", "██   ██", "██   ██", " ██ ██ ", "  ███  "],
+    'W' => ["██   ██", "██   ██", "██   ██", "██ █ ██", "███████", "███ ███"],
+    'X' => ["██   ██", " ██ ██ ", "  ███  ", "  ███  ", " ██ ██ ", "██   ██"],
+    'Y' => ["██   ██", " ██ ██ ", "  ███  ", "   ██  ", "   ██  ", "   ██  "],
+    'Z' => ["███████", "     ██", "    ██ ", "   ██  ", "  ██   ", "███████"],
   }
   
-  # Generate 6 lines of ASCII art with better spacing
+  # Generate 6 lines of clean ASCII art with proper spacing
   6.times do |line_idx|
     line = "║"
     # Center the text by calculating padding
-    total_char_width = display_text.size * 8  # Each char is ~8 chars wide
+    total_char_width = display_text.size * 7  # Each char is 7 chars wide
     padding_val = ((59 - total_char_width) / 2).to_i
     padding_val = padding_val > 3 ? padding_val : 3
     line += " " * padding_val
@@ -81,10 +81,10 @@ def show_intro(command_name : String)
     display_text.chars.each do |char|
       if ascii_chars.has_key?(char)
         pattern = ascii_chars[char]
-        char_line = pattern[line_idx]? || "        "
+        char_line = pattern[line_idx]? || "       "
         line += char_line
       else
-        line += "        "
+        line += "       "
       end
     end
     
@@ -468,8 +468,26 @@ loop do
               count = 0
               rs.each do
                 values = cols.map do |col|
-                  val = rs.read(String?)
-                  val.nil? ? "NULL" : val.to_s
+                  begin
+                    # Read value as DB::Any to handle different types
+                    val = rs.read(::DB::Any)
+                    case val
+                    when Nil
+                      "NULL"
+                    when Int32, Int64
+                      val.to_s
+                    when String
+                      val
+                    when Float32, Float64
+                      val.to_s
+                    when Bool
+                      val.to_s
+                    else
+                      val.to_s
+                    end
+                  rescue
+                    "NULL"
+                  end
                 end
                 puts values.join(" | ")
                 count += 1
@@ -526,9 +544,10 @@ loop do
         puts "\e[33mAvailable models: \#{KothariAPI::ModelRegistry.all_names.join(", ")}\e[0m"
       end
     elsif cmd.includes?(".where(")
-      # Handle: Session.where("live = 1")
+      # Handle: Session.where("live = 1") or Session.where('live = 1')
       name = cmd.split(".").first.strip.downcase
-      condition_match = cmd.match(/\.where\(["'](.+?)["']\)/)
+      # Improved regex to handle both single and double quotes, with optional whitespace
+      condition_match = cmd.match(/\.where\s*\(\s*["']([^"']+)["']\s*\)/)
       
       if condition_match
         condition = condition_match[1]
@@ -548,12 +567,13 @@ loop do
           puts "\e[31m✗ Unknown model: \#{name}\e[0m"
         end
       else
-        puts "\\e[31m✗ Invalid .where() syntax. Use: Model.where('condition')\\e[0m"
+        puts "\e[31m✗ Invalid .where() syntax. Use: Model.where('condition')\e[0m"
       end
     elsif cmd.includes?(".find(")
-      # Handle: Session.find(1)
+      # Handle: Session.find(1) or session.find(1)
       name = cmd.split(".").first.strip.downcase
-      id_match = cmd.match(/\.find\((\d+)\)/)
+      # Improved regex to handle optional whitespace
+      id_match = cmd.match(/\.find\s*\(\s*(\d+)\s*\)/)
       
       if id_match
         id = id_match[1].to_i
@@ -616,6 +636,21 @@ end
 # kothari server [-p|--port PORT]
 # ===============================================
 if ARGV[0]? == "server"
+  unless File.exists?("src/server.cr")
+    puts "\e[31m✗ Error: src/server.cr not found\e[0m"
+    puts "\e[33mMake sure you're in a Kothari app root directory (where src/server.cr exists).\e[0m"
+    exit 1
+  end
+
+  # Ensure shards are installed so that `require "kothari_api"` works when compiling.
+  unless Dir.exists?("lib")
+    puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
+    unless system("shards install")
+      puts "\e[31m✗ Error: shards install failed. Please check the output above.\e[0m"
+      exit 1
+    end
+  end
+
   port = 3000
   
   # Parse port flag
@@ -645,7 +680,9 @@ if ARGV[0]? == "server"
   env["KOTHARI_PORT"] = port.to_s
   
   # Use Process.run to ensure environment variable is passed correctly
+  # Explicitly set chdir to current directory to ensure Crystal finds shards
   Process.run("crystal", ["run", "src/server.cr"], 
+    chdir: Dir.current,
     env: env,
     output: Process::Redirect::Inherit,
     error: Process::Redirect::Inherit
