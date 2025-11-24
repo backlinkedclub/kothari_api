@@ -38,8 +38,8 @@ def show_intro(command_name : String)
   # The original pattern has 6 lines, each 59 chars wide (including borders)
   # We'll create a similar pattern for the command name
   
-  # ASCII art patterns for each character (6 lines each, clearer and more readable)
-  # Using simpler, bolder patterns for better readability
+  # ASCII art patterns for each character (6 lines each, consistent width ~8 chars)
+  # All patterns are designed to be clearly readable and properly aligned
   ascii_chars = {
     'A' => [" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
     'B' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██████╔╝", "╚═════╝ "],
@@ -49,7 +49,7 @@ def show_intro(command_name : String)
     'F' => ["██████╗ ", "██╔═══╝ ", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     "],
     'G' => [" ██████╗", "██╔════╝", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
     'H' => ["██╗  ██╗", "██║  ██║", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
-    'I' => ["██╗", "██║", "██║", "██║", "██║", "╚═╝"],
+    'I' => ["██████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "],
     'J' => ["     ██╗", "     ██║", "     ██║", "██╗  ██║", "╚█████╔╝", " ╚════╝"],
     'K' => ["██╗  ██╗", "██║ ██╔╝", "█████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
     'L' => ["██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝"],
@@ -778,11 +778,27 @@ end
 # ===============================================
 if ARGV[0]? == "db:migrate"
   show_intro("db:migrate")
+  
+  # Ensure db directory exists
+  system "mkdir -p db"
+  
   puts "\e[36m⚡ Connecting to database...\e[0m"
-  KothariAPI::DB.connect("db/development.sqlite3")
+  begin
+    KothariAPI::DB.connect("db/development.sqlite3")
+  rescue ex
+    puts "\e[31m✗ Database connection failed: #{ex.message}\e[0m"
+    puts "\e[33m  Make sure you're in a KothariAPI app directory\e[0m"
+    exit 1
+  end
+  
   puts "\e[36m⚡ Running migrations...\e[0m"
-  KothariAPI::Migrator.migrate
-  puts "\e[32m✓ Migrations complete.\e[0m\n"
+  begin
+    KothariAPI::Migrator.migrate
+    puts "\e[32m✓ Migrations complete.\e[0m\n"
+  rescue ex
+    puts "\e[31m✗ Migration failed: #{ex.message}\e[0m"
+    exit 1
+  end
   exit 0
 end
 
