@@ -1,0 +1,42 @@
+# Binaries
+kothari
+*.o
+*.so
+*.dylib
+
+# Crystal build artifacts
+.crystal/
+lib/
+bin/
+
+# Test apps and temporary directories
+test_*/
+demo_*/
+auth_*/
+space_*/
+user_*/
+*_app/
+*_test/
+*_build/
+
+# Database files
+*.sqlite3
+*.db
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.cache

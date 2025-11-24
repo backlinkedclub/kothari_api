@@ -116,17 +116,9 @@ module KothariAPI
     end
 
     # Convert the current row in a `DB::ResultSet` into a model
-    # instance by reading columns in order. We assume the first
-    # column is an `id` that we can ignore, and then we read each
-    # instance variable in declaration order and call `new` with them.
+    # instance by reading columns in order. The first column is `id`,
+    # and then we read each instance variable in declaration order.
     def self.new_from_row(rs)
-      # Read and discard the first column (typically `id`)
-      begin
-        _id = rs.read
-      rescue
-        # ignore if there is nothing to read
-      end
-
       # Read all instance variable values in order and instantiate.
       # Filter out JSON::Serializable instance variables like @json_unmapped.
       #
@@ -147,14 +139,25 @@ module KothariAPI
           raise "new_from_row called on {{@type}} which has no instance vars; make sure you're using a concrete model subclass"
         {% else %}
           # Build read statements for each instance variable with proper type casting
-          {% for ivar, index in ivars %}
+          # The first column in the database is id, then all other fields
+          # But in the constructor, id is last (since it's optional)
+          {% id_ivar = ivars.find { |ivar| ivar.name.stringify == "id" } %}
+          {% other_ivars = ivars.reject { |ivar| ivar.name.stringify == "id" } %}
+          {% if id_ivar %}
+            ; id_val = rs.read({{id_ivar.type}})
+          {% end %}
+          {% for ivar, index in other_ivars %}
             {% if index == 0 %}
               val{{index}} = rs.read({{ivar.type}})
             {% else %}
               ; val{{index}} = rs.read({{ivar.type}})
             {% end %}
           {% end %}
-          ; new({% for ivar, index in ivars %}{% if index > 0 %}, {% end %}val{{index}}{% end %})
+          {% if id_ivar %}
+            ; new({% for ivar, index in other_ivars %}{% if index > 0 %}, {% end %}val{{index}}{% end %}{% if other_ivars.size > 0 %}, {% end %}id_val)
+          {% else %}
+            ; new({% for ivar, index in other_ivars %}{% if index > 0 %}, {% end %}val{{index}}{% end %})
+          {% end %}
         {% end %}
       {% end %}
     end

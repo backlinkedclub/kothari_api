@@ -3,9 +3,13 @@ require "../kothari_api"
 # Matrix-style intro animation with dynamic command name
 def show_intro(command_name : String)
   # Extract the main command word from command_name
-  # e.g., "db:migrate" -> "MIGRATE", "generate scaffold post" -> "SCAFFOLD", "new myapp" -> "NEW"
+  # Special case: "new" command should show "KOTHARI" instead of "NEW"
+  # e.g., "db:migrate" -> "MIGRATE", "generate scaffold post" -> "SCAFFOLD", "new myapp" -> "KOTHARI"
   parts = command_name.split
-  main_command = if parts.size > 1 && parts[0] == "generate"
+  main_command = if parts.size > 0 && parts[0] == "new"
+    # For "new" command, always show "KOTHARI"
+    "KOTHARI"
+  elsif parts.size > 1 && parts[0] == "generate"
     # For "generate scaffold post" -> "SCAFFOLD"
     parts[1].upcase
   elsif command_name.includes?(":")
@@ -13,7 +17,7 @@ def show_intro(command_name : String)
     split_parts = command_name.split(":")
     split_parts.size > 1 ? split_parts[1].upcase : command_name.upcase
   else
-    # For "new", "routes", etc. -> use first word
+    # For "routes", etc. -> use first word
     parts.size > 0 ? parts[0].upcase : command_name.upcase
   end
   
@@ -34,47 +38,56 @@ def show_intro(command_name : String)
   # The original pattern has 6 lines, each 59 chars wide (including borders)
   # We'll create a similar pattern for the command name
   
-  # ASCII art patterns for each character (6 lines each, ~7 chars wide)
+  # ASCII art patterns for each character (6 lines each, clearer and more readable)
+  # Using simpler, bolder patterns for better readability
   ascii_chars = {
-    'A' => [" ██╗  ", "██╔╝  ", "████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
-    'B' => ["████╗ ", "██╔██╗", "████╔╝ ", "██╔═██╗", "██║  ██╗", "╚═╝  ╚═╝"],
-    'C' => [" █████╗", "██╔══██╗", "██║  ██║", "██║  ██║", "╚██████╔╝", " ╚═════╝"],
-    'D' => ["█████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "],
-    'E' => ["██████╗", "██╔══██╗", "█████╗ ", "██╔══██╗", "██████╔╝", "╚═════╝"],
-    'F' => ["██████╗", "██╔══██╗", "█████╗ ", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
+    'A' => [" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
+    'B' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██████╔╝", "╚═════╝ "],
+    'C' => [" ██████╗", "██╔════╝", "██║     ", "██║     ", "╚██████╗", " ╚═════╝"],
+    'D' => ["██████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "],
+    'E' => ["██████╗ ", "██╔═══╝ ", "█████╗  ", "██╔══╝  ", "██████╗ ", "╚═════╝ "],
+    'F' => ["██████╗ ", "██╔═══╝ ", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     "],
     'G' => [" ██████╗", "██╔════╝", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
     'H' => ["██╗  ██╗", "██║  ██║", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
     'I' => ["██╗", "██║", "██║", "██║", "██║", "╚═╝"],
-    'J' => ["     ██╗", "     ██║", "     ██║", "██   ██║", "╚█████╔╝", " ╚════╝"],
-    'K' => ["██╗  ██╗", "██║ ██╔╝", "█████╔╝", "██╔═██╗", "██║  ██╗", "╚═╝  ╚═╝"],
-    'L' => ["██╗   ", "██║   ", "██║   ", "██║   ", "██████╗", "╚═════╝"],
+    'J' => ["     ██╗", "     ██║", "     ██║", "██╗  ██║", "╚█████╔╝", " ╚════╝"],
+    'K' => ["██╗  ██╗", "██║ ██╔╝", "█████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
+    'L' => ["██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝"],
     'M' => ["███╗   ███╗", "████╗ ████║", "██╔████╔██║", "██║╚██╔╝██║", "██║ ╚═╝ ██║", "╚═╝     ╚═╝"],
     'N' => ["███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝"],
-    'O' => [" ██████╗", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
-    'P' => ["██████╗", "██╔══██╗", "██████╔╝", "██╔═══╝", "██║", "╚═╝"],
-    'Q' => [" ██████╗", "██╔═══██╗", "██║   ██║", "██║▄▄ ██║", "╚██████╔╝", " ╚═▀▀▀═╝"],
-    'R' => ["██████╗", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
+    'O' => [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "],
+    'P' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔═══╝ ", "██║     ", "╚═╝     "],
+    'Q' => [" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║▄▄ ██║", "╚██████╔╝", " ╚═▀▀▀═╝ "],
+    'R' => ["██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
     'S' => ["███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"],
-    'T' => ["████████╗", "╚══██╔══╝", "   ██║", "   ██║", "   ██║", "   ╚═╝"],
+    'T' => ["████████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "],
     'U' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
-    'V' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "╚██╗ ██╔╝", " ╚████╔╝", "  ╚═══╝"],
-    'W' => ["██╗    ██╗", "██║    ██║", "██║ █╗ ██║", "██║███╗██║", "╚███╔███╔╝", " ╚══╝╚══╝"],
-    'X' => ["██╗  ██╗", "╚██╗██╔╝", " ╚███╔╝", " ██╔██╗", "██╔╝ ██╗", "╚═╝  ╚═╝"],
-    'Y' => ["██╗   ██╗", "╚██╗ ██╔╝", " ╚████╔╝", "  ╚██╔╝", "   ██║", "   ╚═╝"],
-    'Z' => ["███████╗", "╚══██╔══╝", "   ██║", "  ██╔╝", " ██╔╝", "╚═╝"],
+    'V' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚═══╝ "],
+    'W' => ["██╗    ██╗", "██║    ██║", "██║ █╗ ██║", "██║███╗██║", "╚███╔███╔╝", " ╚══╝╚══╝ "],
+    'X' => ["██╗  ██╗", "╚██╗██╔╝", " ╚███╔╝ ", " ██╔██╗ ", "██╔╝ ██╗", "╚═╝  ╚═╝"],
+    'Y' => ["██╗   ██╗", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚██╔╝  ", "   ██║   ", "   ╚═╝   "],
+    'Z' => ["███████╗", "╚══██╔══╝", "   ██║   ", "  ██╔╝   ", " ██╔╝    ", "╚═╝      "],
   }
   
-  # Generate 6 lines of ASCII art
+  # Generate 6 lines of ASCII art with better spacing
   6.times do |line_idx|
-    line = "║   "
+    line = "║"
+    # Center the text by calculating padding
+    total_char_width = display_text.size * 8  # Each char is ~8 chars wide
+    padding_val = ((59 - total_char_width) / 2).to_i
+    padding_val = padding_val > 3 ? padding_val : 3
+    line += " " * padding_val
+    
     display_text.chars.each do |char|
       if ascii_chars.has_key?(char)
         pattern = ascii_chars[char]
-        line += pattern[line_idx]? || "      "
+        char_line = pattern[line_idx]? || "        "
+        line += char_line
       else
-        line += "      "
+        line += "        "
       end
     end
+    
     # Pad to fit the box width (59 chars total)
     while line.size < 58
       line += " "
@@ -115,12 +128,16 @@ if ARGV[0]? == "new"
 
   # shard.yml
   # Prefer a local path to the framework when developing it alongside an app.
-  # Fall back to the published GitHub shard when the local path is not present.
+  # Check if we're in the framework directory itself, or if kothari_api exists as sibling
   dependency_block =
-    if Dir.exists?("kothari_api")
+    if File.exists?("src/cli/kothari.cr") || File.exists?("shard.yml") && File.read("shard.yml").includes?("name: kothari_api")
+      # We're in the framework directory, use parent path
+      "  kothari_api:\n    path: ..\n"
+    elsif Dir.exists?("kothari_api")
       # App will live in a sibling directory, so the shard path is ../kothari_api
       "  kothari_api:\n    path: ../kothari_api\n"
     else
+      # Use GitHub version
       "  kothari_api:\n    github: backlinkedclub/kothari_api\n    version: ~> 0.1.0\n"
     end
 
@@ -211,9 +228,29 @@ server = HTTP::Server.new do |context|
 end
 
 port_str = ENV["KOTHARI_PORT"]?
-port = port_str ? port_str.to_i : 3000
-puts "Running on http://localhost:\#{port}"
-server.bind_tcp "0.0.0.0", port
+requested_port = port_str ? port_str.to_i : 3000
+port = requested_port
+max_attempts = 10
+attempt = 0
+
+loop do
+  begin
+    server.bind_tcp "0.0.0.0", port
+    if port != requested_port
+      puts "\e[33m⚠ Port \#{requested_port} is in use. Using port \#{port} instead.\e[0m"
+    end
+    puts "Running on http://localhost:\#{port}"
+    break
+  rescue ex : Socket::BindError
+    attempt += 1
+    if attempt >= max_attempts
+      STDERR.puts "\e[31m✗ Error: Could not find an available port after \#{max_attempts} attempts\e[0m"
+      exit 1
+    end
+    port += 1
+  end
+end
+
 server.listen
 SRV
 
@@ -821,17 +858,43 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
 
   system "mkdir -p app/models"
 
-  # Add timestamp fields to scaffold model
+  # Add id and timestamp fields to scaffold model
+  id_ivar = "@id : Int32?"
+  id_property = "property id : Int32?"
   timestamp_ivars = "\n  @created_at : String?\n  @updated_at : String?"
   timestamp_args = ", @created_at : String? = nil, @updated_at : String? = nil"
+  id_arg = ", @id : Int32? = nil"
+  
+  # Generate property declarations for all fields
+  model_properties = fields.map do |f|
+    key, type = f.split(":")
+    crystal_type = case type.downcase
+                   when "string", "text"   then "String"
+                   when "int", "integer"    then "Int32"
+                   when "bigint", "int64"   then "Int64"
+                   when "float", "double"   then "Float64"
+                   when "bool", "boolean"   then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
+                   else
+                     "String"
+                   end
+    "property #{key} : #{crystal_type}"
+  end.join("\n  ")
+  timestamp_properties = "\n  property created_at : String?\n  property updated_at : String?"
   
   File.write "app/models/#{name}.cr", <<-MODEL
 class #{class_name} < KothariAPI::Model
   table "#{name}s"
 
+  #{id_ivar}
   #{ivars}#{timestamp_ivars}
 
-  #{fields.empty? ? "" : "def initialize(#{ctor_args}#{timestamp_args})\n  end"}
+  #{id_property}
+  #{model_properties}#{timestamp_properties}
+
+  #{fields.empty? ? "" : "def initialize(#{ctor_args}#{timestamp_args}#{id_arg})\n  end"}
 
   # NOTE: This model is registered so tools like `kothari console`
   # can discover it by name.
@@ -870,12 +933,19 @@ class #{class_name} < KothariAPI::Model
 
   include KothariAPI::Auth::Password
 
+  @id : Int32?
   @email : String
   @password_digest : String
   @created_at : String?
   @updated_at : String?
 
-  def initialize(@email : String, @password_digest : String, @created_at : String? = nil, @updated_at : String? = nil)
+  property id : Int32?
+  property email : String
+  property password_digest : String
+  property created_at : String?
+  property updated_at : String?
+
+  def initialize(@email : String, @password_digest : String, @created_at : String? = nil, @updated_at : String? = nil, @id : Int32? = nil)
   end
 
   KothariAPI::ModelRegistry.register("#{name}", #{class_name})
@@ -1056,9 +1126,12 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
 
   system "mkdir -p app/models"
 
-  # Add timestamp fields to model
+  # Add id and timestamp fields to model
+  id_ivar = "@id : Int32?"
+  id_property = "property id : Int32?"
   timestamp_ivars = "\n  @created_at : String?\n  @updated_at : String?"
   timestamp_args = ", @created_at : String? = nil, @updated_at : String? = nil"
+  id_arg = ", @id : Int32? = nil"
   
   # Generate property declarations for all fields
   model_properties = fields.map do |f|
@@ -1083,11 +1156,13 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
 class #{class_name} < KothariAPI::Model
   table "#{plural}"
 
+  #{id_ivar}
   #{model_ivars}#{timestamp_ivars}
 
+  #{id_property}
   #{model_properties}#{timestamp_properties}
 
-  #{fields.empty? ? "" : "def initialize(#{model_ctor_args}#{timestamp_args})\n  end"}
+  #{fields.empty? ? "" : "def initialize(#{model_ctor_args}#{timestamp_args}#{id_arg})\n  end"}
 
   KothariAPI::ModelRegistry.register("#{singular}", #{class_name})
 end
@@ -1511,44 +1586,61 @@ if ARGV[0]? == "help" || ARGV.empty?
   command_name = ARGV.empty? ? "kothari" : "help"
   show_intro(command_name)
 
-puts "\e[36mAvailable Commands:\e[0m\n"
-puts "  \e[33mnew\e[0m \e[90m<app_name>\e[0m"
-puts "     Create a new KothariAPI application"
-puts ""
-puts "  \e[33mserver\e[0m \e[90m[-p|--port PORT]\e[0m"
-puts "     Start the development server (default: port 3000)"
-puts ""
-puts "  \e[33mbenchmark\e[0m"
-puts "     Run performance benchmarks"
-puts ""
-puts "  \e[33mg controller\e[0m \e[90m<name>\e[0m"
-puts "     Generate a new controller"
-puts ""
-puts "  \e[33mg model\e[0m \e[90m<name>\e[0m \e[90m[field:type ...]\e[0m"
-puts "     Generate a new model with optional fields"
-puts ""
-puts "  \e[33mg migration\e[0m \e[90m<name>\e[0m \e[90m[field:type ...]\e[0m"
-puts "     Generate a new database migration"
-puts ""
-puts "  \e[33mdb:migrate\e[0m"
-puts "     Run pending database migrations"
-puts ""
-puts "  \e[33mdb:reset\e[0m"
-puts "     Drop, create, and migrate the database"
-puts ""
-puts "  \e[33mg scaffold\e[0m \e[90m<name>\e[0m \e[90m[field:type ...]\e[0m"
-puts "     Generate model, controller, and routes"
-puts ""
-puts "  \e[33mg auth\e[0m \e[90m[name]\e[0m"
-puts "     Generate authentication (User model, AuthController, routes)"
-puts ""
-puts "  \e[33mconsole\e[0m"
-puts "     Open an interactive console"
-puts ""
-puts "  \e[33mroutes\e[0m"
-puts "     List all registered routes"
-puts ""
-puts "\e[32mFor more information, visit: https://github.com/kothari-api\e[0m"
-puts "\e[90mVersion: 1.0.0\e[0m\n"
+  puts "\e[36m╔═══════════════════════════════════════════════════════════╗\e[0m"
+  puts "\e[36m║                  AVAILABLE COMMANDS                      ║\e[0m"
+  puts "\e[36m╚═══════════════════════════════════════════════════════════╝\e[0m"
+  puts ""
+  puts "\e[33m📦 App Management:\e[0m"
+  puts "  \e[36mkothari new\e[0m \e[90m<app_name>\e[0m"
+  puts "     Create a new KothariAPI application"
+  puts ""
+  puts "\e[33m🚀 Server:\e[0m"
+  puts "  \e[36mkothari server\e[0m \e[90m[-p|--port PORT]\e[0m"
+  puts "     Start the development server (default: port 3000)"
+  puts ""
+  puts "  \e[36mkothari build\e[0m \e[90m[output] [--release]\e[0m"
+  puts "     Compile application into a binary"
+  puts ""
+  puts "\e[33m⚡ Generators:\e[0m"
+  puts "  \e[36mkothari g controller\e[0m \e[90m<name>\e[0m"
+  puts "     Generate a new controller"
+  puts ""
+  puts "  \e[36mkothari g model\e[0m \e[90m<name> [field:type ...]\e[0m"
+  puts "     Generate a new model with optional fields"
+  puts ""
+  puts "  \e[36mkothari g migration\e[0m \e[90m<name> [field:type ...]\e[0m"
+  puts "     Generate a new database migration"
+  puts ""
+  puts "  \e[36mkothari g scaffold\e[0m \e[90m<name> [field:type ...]\e[0m"
+  puts "     Generate model, controller, migration, and routes"
+  puts ""
+  puts "  \e[36mkothari g auth\e[0m \e[90m[name]\e[0m"
+  puts "     Generate authentication (User model, AuthController, routes)"
+  puts ""
+  puts "\e[33m🗄️  Database:\e[0m"
+  puts "  \e[36mkothari db:migrate\e[0m"
+  puts "     Run pending database migrations"
+  puts ""
+  puts "  \e[36mkothari db:reset\e[0m"
+  puts "     Drop, create, and migrate the database"
+  puts ""
+  puts "\e[33m🛠️  Utilities:\e[0m"
+  puts "  \e[36mkothari routes\e[0m"
+  puts "     List all registered routes"
+  puts ""
+  puts "  \e[36mkothari console\e[0m"
+  puts "     Open an interactive console"
+  puts ""
+  puts "  \e[36mkothari benchmark\e[0m"
+  puts "     Run performance benchmarks"
+  puts ""
+  puts "  \e[36mkothari help\e[0m"
+  puts "     Show this help message"
+  puts ""
+  puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
+  puts "\e[32m║  For more information: https://github.com/kothari-api   ║\e[0m"
+  puts "\e[32m║  Version: \e[36m1.0.0\e[32m                                          ║\e[0m"
+  puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
+  puts ""
   exit 0
 end
