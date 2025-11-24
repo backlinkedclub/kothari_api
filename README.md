@@ -176,25 +176,102 @@ This keeps all routes inside the single `Router.draw` block and lets you grow yo
 
 ---
 
-## How to Build and Install the CLI
+## Install on Ubuntu Server
 
-From this framework repo (`/var/crystal_programs/kothari_api`):
+- **Prereqs**: Ubuntu, `sudo` access, network access to GitHub.
+
+### 1. Install Crystal and system libraries
 
 ```bash
-crystal build src/cli/kothari.cr -o kothari
-sudo mv kothari /usr/local/bin/kothari   # or /usr/bin/kothari
+sudo apt-get update
+sudo apt-get install -y crystal
+
+# Install Boehm GC runtime used by Crystal binaries
+sudo apt-get install -y libgc1c2 || sudo apt-get install -y libgc1 libgc-dev
 ```
 
-Now you can use `kothari` globally:
+### 2. Clone KothariAPI and build the CLI
 
 ```bash
+cd ~
+git clone https://github.com/backlinkedclub/kothari_api.git
+cd kothari_api
+
+shards install
+crystal build src/cli/kothari.cr -o kothari
+sudo mv kothari /usr/local/bin/kothari
+```
+
+You can now run:
+
+```bash
+kothari
+```
+
+and see the Kothari logo and help.
+
+### 3. Create a new Kothari app
+
+```bash
+mkdir -p /var/apps
+cd /var/apps
+
 kothari new myapp
 cd myapp
 shards install
+```
+
+The generated `shard.yml` will include:
+
+```yaml
+dependencies:
+  kothari_api:
+    github: backlinkedclub/kothari_api
+    version: ~> 0.1.0
+```
+
+### 4. Run the server and test auth
+
+```bash
+# Run DB migrations if you've generated auth/scaffolds
+kothari db:migrate
+
+# Start dev server (listen on http://localhost:3000)
 kothari server
 ```
 
-Then open `http://localhost:3000` in your browser.
+In another terminal you can test:
+
+```bash
+# Signup
+curl -s -X POST http://localhost:3000/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Login
+curl -s -X POST http://localhost:3000/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+If you scaffold a resource, e.g.:
+
+```bash
+kothari g scaffold post title:string body:text
+kothari db:migrate
+```
+
+You can also:
+
+```bash
+# Create a post
+curl -s -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Hello","body":"World"}'
+
+# List posts
+curl -s http://localhost:3000/posts
+```
 
 ---
 
