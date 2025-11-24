@@ -1,296 +1,520 @@
-## KothariAPI – Lightweight Crystal Web Framework
+# Kothari API Framework
 
-KothariAPI is a small, Rails‑inspired web framework for Crystal. It provides:
+A lightweight, Rails-inspired web framework for Crystal. Build fast, type-safe APIs with minimal boilerplate.
 
-- **CLI**: `kothari` for generating apps and controllers.
-- **Router DSL**: `KothariAPI::Router::Router.draw do |r| ... end`.
-- **Base controller**: `KothariAPI::Controller` with JSON helpers.
+![Kothari API Framework](https://img.shields.io/badge/Kothari-API%20Framework-blue)
+![Crystal](https://img.shields.io/badge/Crystal-1.0+-brightgreen)
 
-This document explains what is currently implemented and what was fixed in this iteration.
+## Features
 
----
+- 🚀 **Fast CLI** - Generate apps, models, controllers, and more
+- 🎨 **Beautiful ASCII Banners** - Dynamic command banners for every command
+- 🗄️ **Database Migrations** - SQLite-based migrations with automatic timestamps
+- 🔐 **Built-in Authentication** - JWT-based auth with password hashing
+- 📦 **Scaffold Generator** - Full CRUD scaffolding with one command
+- 🛣️ **Route Management** - Simple DSL for defining routes
+- 📊 **Interactive Console** - Explore your data with an interactive REPL
+- 🎯 **Type-Safe** - Full Crystal type safety throughout
 
-## Project Layout
+## Installation
 
-- **Framework shard** (this repo):
-  - `src/kothari_api.cr` – main entry for the shard, requires all framework pieces.
-  - `src/kothari_api/controller.cr` – base controller class.
-  - `src/kothari_api/router/route.cr` – `Route` value object (method, path, controller, action).
-  - `src/kothari_api/router/router.cr` – `Router` class and routing DSL.
-  - `src/cli/kothari.cr` – CLI entry point (`kothari`).
+### Prerequisites
 
-- **Generated app** (e.g. `/var/crystal_programs/demoapp`):
-  - `app/controllers/` – application controllers.
-  - `app/controllers.cr` – requires all controllers.
-  - `config/routes.cr` – application routes.
-  - `src/server.cr` – HTTP server that uses the router and controllers.
+- Crystal 1.0 or higher
+- SQLite3 (for database)
 
----
+### Install Kothari CLI
 
-## Router: Design and Fix
+```bash
+# Clone the repository
+git clone https://github.com/backlinkedclub/kothari_api.git
+cd kothari_api
 
-### Route Representation
+# Install dependencies
+shards install
 
-`KothariAPI::Router::Route` holds the HTTP method, path, controller, and action:
+# Build the CLI
+crystal build src/cli/kothari.cr -o kothari
 
-- `method` – HTTP verb (e.g. `"GET"`).
-- `path` – request path pattern (e.g. `"/"` or `"/users"`).
-- `controller` – string name from the `to:` DSL (e.g. `"home"`).
-- `action` – action name (e.g. `"index"`).
+# Install globally (optional)
+sudo mv kothari /usr/local/bin/kothari
+```
 
-It is created via `Route.new(method, path, to)`, where `to` is of the form `"controller#action"`.
+## Quick Start
 
-### Router DSL
+```bash
+# Create a new app
+kothari new myapp
+cd myapp
 
-The router lives in `src/kothari_api/router/router.cr` as `KothariAPI::Router::Router` and supports:
+# Install dependencies
+shards install
 
-- **Registering routes**:
-  - `get(path : String, to : String)`
-  - `post(path : String, to : String)`
-- **Looking up a route**:
-  - `match(method : String, path : String)` – returns a `Route?`.
-- **DSL**:
-  - `draw` yields the router itself so you can define routes in a block.
+# Generate a scaffold
+kothari g scaffold post title:string content:text
 
-The DSL is used like this:
+# Run migrations
+kothari db:migrate
+
+# Start the server
+kothari server
+```
+
+Visit `http://localhost:3000/posts` to see your API in action!
+
+## CLI Commands
+
+### App Management
+
+#### `kothari new <app_name>`
+
+Creates a new KothariAPI application with the standard directory structure.
+
+```bash
+kothari new blog_api
+cd blog_api
+shards install
+```
+
+**Generated Structure:**
+```
+myapp/
+├── app/
+│   ├── controllers/
+│   └── models/
+├── config/
+│   └── routes.cr
+├── db/
+│   └── migrations/
+├── src/
+│   └── server.cr
+└── shard.yml
+```
+
+#### `kothari server [-p|--port PORT]`
+
+Starts the development server. Default port is 3000.
+
+```bash
+# Default port (3000)
+kothari server
+
+# Custom port
+kothari server -p 3001
+kothari server --port 5000
+```
+
+#### `kothari build [output] [--release]`
+
+Compiles your application into a binary.
+
+```bash
+# Build with default name
+kothari build
+
+# Build with custom name
+kothari build myapp
+
+# Build optimized release
+kothari build myapp --release
+```
+
+### Generators
+
+#### `kothari g model <name> [field:type ...]`
+
+Generates a new model with optional fields.
+
+```bash
+# Simple model
+kothari g model user
+
+# Model with fields
+kothari g model article title:string content:text views:integer
+```
+
+**Supported Data Types:**
+- `string`, `text` → `String`
+- `int`, `integer` → `Int32`
+- `bigint`, `int64` → `Int64`
+- `float`, `double` → `Float64`
+- `bool`, `boolean` → `Bool`
+- `json`, `json::any` → `JSON::Any`
+- `time`, `datetime`, `timestamp` → `Time`
+- `uuid` → `String`
+
+#### `kothari g migration <name> [field:type ...]`
+
+Generates a database migration.
+
+```bash
+kothari g migration create_users email:string password_digest:string
+kothari db:migrate
+```
+
+#### `kothari g controller <name>`
+
+Generates a new controller with an `index` action and route.
+
+```bash
+kothari g controller blog
+# Creates BlogController with GET /blog route
+```
+
+#### `kothari g scaffold <name> [field:type ...]`
+
+Generates a complete CRUD scaffold: model, migration, controller, and routes.
+
+```bash
+# Generate scaffold
+kothari g scaffold post title:string content:text published:bool
+
+# Run migrations
+kothari db:migrate
+
+# Start server
+kothari server
+```
+
+**Generated Routes:**
+- `GET /posts` - List all posts
+- `POST /posts` - Create a new post
+- `GET /posts/:id` - Show a post
+- `PATCH /posts/:id` - Update a post
+- `DELETE /posts/:id` - Delete a post
+
+#### `kothari g auth [name]`
+
+Generates authentication system with User model, AuthController, and routes.
+
+```bash
+kothari g auth
+kothari db:migrate
+```
+
+**Generated Routes:**
+- `POST /signup` - Register a new user
+- `POST /login` - Authenticate and get JWT token
+
+**Example Usage:**
+```bash
+# Signup
+curl -X POST http://localhost:3000/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secure123"}'
+
+# Login
+curl -X POST http://localhost:3000/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secure123"}'
+```
+
+### Database Commands
+
+#### `kothari db:migrate`
+
+Runs all pending database migrations.
+
+```bash
+kothari db:migrate
+```
+
+#### `kothari db:reset`
+
+Drops the database, recreates it, and runs all migrations.
+
+```bash
+kothari db:reset
+```
+
+### Utility Commands
+
+#### `kothari routes`
+
+Lists all registered routes in a formatted table.
+
+```bash
+kothari routes
+```
+
+**Output:**
+```
+╔═══════════════════════════════════════════════════════════╗
+║                      ROUTES TABLE                         ║
+╚═══════════════════════════════════════════════════════════╝
+
+Method    Path                    Controller#Action
+------------------------------------------------------------
+GET       /                       home#index
+GET       /posts                 posts#index
+POST      /posts                 posts#create
+POST      /signup                auth#signup
+POST      /login                 auth#login
+
+Total: 5 route(s)
+```
+
+#### `kothari console`
+
+Opens an interactive console for exploring your models and running SQL queries.
+
+```bash
+kothari console
+```
+
+**Console Commands:**
+```ruby
+# List all models
+models
+
+# Query models
+Post.all
+Post.find(1)
+Post.where("title = 'Hello'")
+
+# Run SQL
+sql SELECT * FROM posts
+
+# Exit
+exit
+```
+
+#### `kothari help` or `kothari`
+
+Displays the help menu with all available commands.
+
+```bash
+kothari
+kothari help
+```
+
+## Project Structure
+
+```
+myapp/
+├── app/
+│   ├── controllers/          # Application controllers
+│   │   ├── home_controller.cr
+│   │   └── posts_controller.cr
+│   ├── models/               # Data models
+│   │   └── post.cr
+│   ├── controllers.cr        # Auto-loader for controllers
+│   └── models.cr             # Auto-loader for models
+├── config/
+│   └── routes.cr             # Route definitions
+├── db/
+│   ├── migrations/           # Database migrations
+│   └── development.sqlite3   # SQLite database
+├── src/
+│   └── server.cr             # HTTP server entry point
+├── shard.yml                 # Dependencies
+└── console.cr                # Console entry point
+```
+
+## Routing
+
+Define routes in `config/routes.cr`:
 
 ```crystal
 KothariAPI::Router::Router.draw do |r|
   r.get "/", to: "home#index"
+  r.get "/posts", to: "posts#index"
+  r.post "/posts", to: "posts#create"
+  r.get "/posts/:id", to: "posts#show"
 end
 ```
 
-### Critical Fix: `draw` Block Parameter Error
+## Controllers
 
-Originally, `draw` was implemented as:
-
-```crystal
-def self.draw(&block)
-  block.call(self)
-end
-```
-
-Calling it with `do |r|` caused:
-
-> Error: wrong number of block parameters (given 1, expected 0)
-
-Crystal’s compiler did not know that the block accepted one argument when written this way.
-
-**Solution**: switch to `yield self`, letting Crystal infer the block arity correctly:
+Controllers inherit from `KothariAPI::Controller`:
 
 ```crystal
-def self.draw
-  yield self
-end
-```
-
-Now `draw do |r|` works exactly as intended, and there is only one router implementation: `src/kothari_api/router/router.cr`.
-
----
-
-## Base Controller
-
-`src/kothari_api/controller.cr` defines `KothariAPI::Controller`:
-
-- **Holds the HTTP context**:
-  - `getter context : HTTP::Server::Context`
-  - Initialized with `def initialize(@context)`.
-- **JSON helper**:
-  - `def json(data)` sets `Content-Type` to `application/json` and prints `data.to_json`.
-
-All application controllers inherit from this base class, e.g.:
-
-```crystal
-class HomeController < KothariAPI::Controller
+class PostsController < KothariAPI::Controller
   def index
-    json({ message: "Welcome to KothariAPI" })
+    json(Post.all)
   end
+
+  def create
+    attrs = post_params
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s
+    )
+    context.response.status = HTTP::Status::CREATED
+    json(post)
+  end
+
+  private def post_params
+    JSON.parse(context.request.body.not_nil!.gets_to_end).as_h
+  end
+end
+
+KothariAPI::ControllerRegistry.register("posts", PostsController)
+```
+
+## Models
+
+Models inherit from `KothariAPI::Model`:
+
+```crystal
+class Post < KothariAPI::Model
+  table "posts"
+
+  @title : String
+  @content : String
+  @created_at : String?
+  @updated_at : String?
+
+  def initialize(@title : String, @content : String, 
+                 @created_at : String? = nil, @updated_at : String? = nil)
+  end
+
+  KothariAPI::ModelRegistry.register("post", Post)
 end
 ```
 
----
+**Model Methods:**
+- `Post.all` - Get all records
+- `Post.find(id)` - Find by ID
+- `Post.create(**fields)` - Create a new record
+- `Post.where(condition)` - Query with SQL condition
 
-## CLI (`kothari`)
+## Data Types
 
-The CLI entry is `src/cli/kothari.cr` and supports:
+KothariAPI supports the following data types:
 
-- **`kothari new <app_name>`** – generate a new app.
-- **`kothari server`** – run `crystal run src/server.cr` in the current app.
-- **`kothari build [output] [--release]`** – compile `src/server.cr` into a binary.
-- **`kothari g controller <name>`** – generate a new controller and route.
+| CLI Type | Crystal Type | SQL Type | Example |
+|----------|--------------|----------|---------|
+| `string`, `text` | `String` | `TEXT` | `name:string` |
+| `int`, `integer` | `Int32` | `INTEGER` | `age:int` |
+| `bigint`, `int64` | `Int64` | `INTEGER` | `views:bigint` |
+| `float`, `double` | `Float64` | `REAL` | `price:float` |
+| `bool`, `boolean` | `Bool` | `INTEGER` | `active:bool` |
+| `json`, `json::any` | `JSON::Any` | `TEXT` | `metadata:json` |
+| `time`, `datetime`, `timestamp` | `Time` | `TEXT` | `created:time` |
+| `uuid` | `String` | `TEXT` | `id:uuid` |
 
-### What `kothari new` Generates
+## Authentication
 
-For `kothari new demoapp`, the CLI:
-
-- Creates directories:
-  - `demoapp/app/controllers`
-  - `demoapp/config`
-  - `demoapp/src`
-- Writes `demoapp/shard.yml`:
-  - Adds a **path dependency** on this framework:
-
-    ```yaml
-    dependencies:
-      kothari_api:
-        path: /var/crystal_programs/kothari_api
-    ```
-
-  - Sets the main target to `src/server.cr`.
-- Generates `config/routes.cr`:
-
-  ```crystal
-  KothariAPI::Router::Router.draw do |r|
-    r.get "/", to: "home#index"
-  end
-  ```
-
-- Generates `app/controllers/home_controller.cr` with `HomeController#index`.
-- Generates `app/controllers.cr` that requires `kothari_api` and `home_controller`.
-
-### Generated `src/server.cr`
-
-The CLI now generates a **simple, working** HTTP server:
-
-- Requires controllers, the framework, routes, and `http/server`.
-- Creates `HTTP::Server` and uses the router to match incoming requests.
-- For now, it dispatches directly to `HomeController#index` when a route is found.
-- Returns 404 with a JSON error when no route is found.
-
-This design:
-
-- Avoids unsupported Ruby APIs (`Object.const_get`, `send`).
-- Plays nicely with Crystal’s static type system.
-- Ensures that `kothari new` + `kothari server` produce a **compilable, runnable** app.
-
----
-
-## `kothari g controller`
-
-The generator:
-
-- Creates `app/controllers/<name>_controller.cr` with a basic `index` action.
-- Appends a `require` to `app/controllers.cr`.
-- Inserts a new `r.get "/<name>", to: "<name>#index"` route into `config/routes.cr` before the final `end`.
-
-This keeps all routes inside the single `Router.draw` block and lets you grow your app incrementally.
-
----
-
-## Install on Ubuntu Server
-
-- **Prereqs**: Ubuntu, `sudo` access, network access to GitHub.
-
-### 1. Install Crystal and system libraries
+KothariAPI includes built-in JWT-based authentication:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y crystal
-
-# Install Boehm GC runtime used by Crystal binaries
-sudo apt-get install -y libgc1c2 || sudo apt-get install -y libgc1 libgc-dev
+# Generate auth
+kothari g auth
+kothari db:migrate
 ```
 
-### 2. Clone KothariAPI and build the CLI
+**Usage:**
+```crystal
+# Signup
+POST /signup
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+
+# Login (returns JWT token)
+POST /login
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+## ASCII Art Banners
+
+Every command displays a beautiful ASCII art banner with the command name:
 
 ```bash
-cd ~
-git clone https://github.com/backlinkedclub/kothari_api.git
-cd kothari_api
+kothari new myapp      # Shows "NEW" banner
+kothari db:migrate     # Shows "MIGRATE" banner
+kothari routes         # Shows "ROUTES" banner
+kothari help           # Shows "HELP" banner
+```
 
+## Examples
+
+### Complete Blog API
+
+```bash
+# Create app
+kothari new blog_api
+cd blog_api
 shards install
-crystal build src/cli/kothari.cr -o kothari
-sudo mv kothari /usr/local/bin/kothari
-```
 
-You can now run:
+# Generate scaffold
+kothari g scaffold post title:string content:text published:bool
 
-```bash
-kothari
-```
+# Generate auth
+kothari g auth
 
-and see the Kothari logo and help.
-
-### 3. Create a new Kothari app
-
-```bash
-mkdir -p /var/apps
-cd /var/apps
-
-kothari new myapp
-cd myapp
-shards install
-```
-
-The generated `shard.yml` will include:
-
-```yaml
-dependencies:
-  kothari_api:
-    github: backlinkedclub/kothari_api
-    version: ~> 0.1.0
-```
-
-### 4. Run the server and test auth
-
-```bash
-# Run DB migrations if you've generated auth/scaffolds
+# Run migrations
 kothari db:migrate
 
-# Start dev server (listen on http://localhost:3000)
+# Start server
+kothari server -p 3000
+```
+
+**API Endpoints:**
+- `GET /posts` - List all posts
+- `POST /posts` - Create a post
+- `POST /signup` - Register user
+- `POST /login` - Login user
+
+### E-commerce API
+
+```bash
+kothari new shop_api
+cd shop_api
+shards install
+
+# Products with JSON metadata
+kothari g scaffold product \
+  name:string \
+  price:float \
+  metadata:json \
+  created:time
+
+kothari db:migrate
 kothari server
 ```
 
-In another terminal you can test:
+## Development
+
+### Running Tests
 
 ```bash
-# Signup
-curl -s -X POST http://localhost:3000/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+# Build the framework
+crystal build src/cli/kothari.cr -o kothari
 
-# Login
-curl -s -X POST http://localhost:3000/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+# Test in a new app
+kothari new test_app
+cd test_app
+shards install
+kothari server
 ```
 
-If you scaffold a resource, e.g.:
+### Contributing
 
-```bash
-kothari g scaffold post title:string body:text
-kothari db:migrate
-```
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-You can also:
+## License
 
-```bash
-# Create a post
-curl -s -X POST http://localhost:3000/posts \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Hello","body":"World"}'
+MIT License - see LICENSE file for details
 
-# List posts
-curl -s http://localhost:3000/posts
-```
+## Support
+
+- GitHub Issues: [https://github.com/backlinkedclub/kothari_api/issues](https://github.com/backlinkedclub/kothari_api/issues)
+- Documentation: See this README
+
+## Version
+
+Current Version: **1.0.0**
 
 ---
 
-## Summary of Key Fixes and Behaviors
-
-- **Router DSL**:
-  - `Router.draw` now uses `yield self`, fixing the block parameter error.
-  - There is a single, authoritative router implementation in `src/kothari_api/router/router.cr`.
-- **CLI server template**:
-  - Removed Ruby-style `Object.const_get` and `send`.
-  - Generates a minimal, type-safe demo server using `HomeController#index`.
-  - Uses `HTTP::Status::NOT_FOUND` instead of a bare integer for 404.
-- **End‑to‑end flow now works**:
-  - `kothari new demoapp`
-  - `cd demoapp && shards install`
-  - `kothari server`
-  - Visit `http://localhost:3000` to see the JSON welcome message.
-
-From here you can iterate on more advanced, compile‑time‑safe controller dispatch (e.g., macros or registries), knowing the router and CLI scaffolding are in a correct, working state.
-
-
+**Built with ❤️ using Crystal**

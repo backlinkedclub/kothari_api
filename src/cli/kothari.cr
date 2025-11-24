@@ -1,18 +1,90 @@
 require "../kothari_api"
 
-# Matrix-style intro animation
+# Matrix-style intro animation with dynamic command name
 def show_intro(command_name : String)
+  # Extract the main command word from command_name
+  # e.g., "db:migrate" -> "MIGRATE", "generate scaffold post" -> "SCAFFOLD", "new myapp" -> "NEW"
+  parts = command_name.split
+  main_command = if parts.size > 1 && parts[0] == "generate"
+    # For "generate scaffold post" -> "SCAFFOLD"
+    parts[1].upcase
+  elsif command_name.includes?(":")
+    # For "db:migrate" -> "MIGRATE"
+    split_parts = command_name.split(":")
+    split_parts.size > 1 ? split_parts[1].upcase : command_name.upcase
+  else
+    # For "new", "routes", etc. -> use first word
+    parts.size > 0 ? parts[0].upcase : command_name.upcase
+  end
+  
+  # Clean up the command name (remove non-alphanumeric, limit length)
+  display_text = main_command.gsub(/[^A-Z0-9]/, "")
+  if display_text.size > 8
+    display_text = display_text[0, 8]
+  end
+  if display_text.empty?
+    display_text = "KOTHARI"
+  end
+  
   puts "\n\e[32m" # Green color
   puts "╔═══════════════════════════════════════════════════════════╗"
   puts "║                                                           ║"
-  puts "║   ██╗  ██╗ ██████╗ ████████╗██╗  ██╗ █████╗ ██████╗ ██╗   ║"
-  puts "║   ██║ ██╔╝██╔═══██╗╚══██╔══╝██║  ██║██╔══██╗██╔══██╗██║   ║"
-  puts "║   █████╔╝ ██║   ██║   ██║   ███████║███████║██████╔╝██║   ║"
-  puts "║   ██╔═██╗ ██║   ██║   ██║   ██╔══██║██╔══██║██╔══██╗██║   ║"
-  puts "║   ██║  ██╗╚██████╔╝   ██║   ██║  ██║██║  ██║██║  ██║██║   ║"
-  puts "║   ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝   ║"
+  
+  # Use the original KOTHARI ASCII art pattern but replace with command name
+  # The original pattern has 6 lines, each 59 chars wide (including borders)
+  # We'll create a similar pattern for the command name
+  
+  # ASCII art patterns for each character (6 lines each, ~7 chars wide)
+  ascii_chars = {
+    'A' => [" ██╗  ", "██╔╝  ", "████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"],
+    'B' => ["████╗ ", "██╔██╗", "████╔╝ ", "██╔═██╗", "██║  ██╗", "╚═╝  ╚═╝"],
+    'C' => [" █████╗", "██╔══██╗", "██║  ██║", "██║  ██║", "╚██████╔╝", " ╚═════╝"],
+    'D' => ["█████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "],
+    'E' => ["██████╗", "██╔══██╗", "█████╗ ", "██╔══██╗", "██████╔╝", "╚═════╝"],
+    'F' => ["██████╗", "██╔══██╗", "█████╗ ", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
+    'G' => [" ██████╗", "██╔════╝", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
+    'H' => ["██╗  ██╗", "██║  ██║", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"],
+    'I' => ["██╗", "██║", "██║", "██║", "██║", "╚═╝"],
+    'J' => ["     ██╗", "     ██║", "     ██║", "██   ██║", "╚█████╔╝", " ╚════╝"],
+    'K' => ["██╗  ██╗", "██║ ██╔╝", "█████╔╝", "██╔═██╗", "██║  ██╗", "╚═╝  ╚═╝"],
+    'L' => ["██╗   ", "██║   ", "██║   ", "██║   ", "██████╗", "╚═════╝"],
+    'M' => ["███╗   ███╗", "████╗ ████║", "██╔████╔██║", "██║╚██╔╝██║", "██║ ╚═╝ ██║", "╚═╝     ╚═╝"],
+    'N' => ["███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝"],
+    'O' => [" ██████╗", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
+    'P' => ["██████╗", "██╔══██╗", "██████╔╝", "██╔═══╝", "██║", "╚═╝"],
+    'Q' => [" ██████╗", "██╔═══██╗", "██║   ██║", "██║▄▄ ██║", "╚██████╔╝", " ╚═▀▀▀═╝"],
+    'R' => ["██████╗", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"],
+    'S' => ["███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"],
+    'T' => ["████████╗", "╚══██╔══╝", "   ██║", "   ██║", "   ██║", "   ╚═╝"],
+    'U' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝"],
+    'V' => ["██╗   ██╗", "██║   ██║", "██║   ██║", "╚██╗ ██╔╝", " ╚████╔╝", "  ╚═══╝"],
+    'W' => ["██╗    ██╗", "██║    ██║", "██║ █╗ ██║", "██║███╗██║", "╚███╔███╔╝", " ╚══╝╚══╝"],
+    'X' => ["██╗  ██╗", "╚██╗██╔╝", " ╚███╔╝", " ██╔██╗", "██╔╝ ██╗", "╚═╝  ╚═╝"],
+    'Y' => ["██╗   ██╗", "╚██╗ ██╔╝", " ╚████╔╝", "  ╚██╔╝", "   ██║", "   ╚═╝"],
+    'Z' => ["███████╗", "╚══██╔══╝", "   ██║", "  ██╔╝", " ██╔╝", "╚═╝"],
+  }
+  
+  # Generate 6 lines of ASCII art
+  6.times do |line_idx|
+    line = "║   "
+    display_text.chars.each do |char|
+      if ascii_chars.has_key?(char)
+        pattern = ascii_chars[char]
+        line += pattern[line_idx]? || "      "
+      else
+        line += "      "
+      end
+    end
+    # Pad to fit the box width (59 chars total)
+    while line.size < 58
+      line += " "
+    end
+    line += "║"
+    puts line
+  end
+  
   puts "║                                                           ║"
-  puts "║              Rails-Style API Framework for Crystal        ║"
+  puts "║              Kothari API Framework                       ║"
   puts "║                                                           ║"
   puts "╚═══════════════════════════════════════════════════════════╝"
   puts "\e[0m" # Reset color
@@ -138,8 +210,10 @@ server = HTTP::Server.new do |context|
   end
 end
 
-puts "Running on http://localhost:3000"
-server.bind_tcp "0.0.0.0", 3000
+port_str = ENV["KOTHARI_PORT"]?
+port = port_str ? port_str.to_i : 3000
+puts "Running on http://localhost:\#{port}"
+server.bind_tcp "0.0.0.0", port
 server.listen
 SRV
 
@@ -416,7 +490,7 @@ loop do
           puts "\e[31m✗ Unknown model: \#{name}\e[0m"
         end
       else
-        puts "\e[31m✗ Invalid .where() syntax. Use: Model.where(\"condition\")\e[0m"
+        puts "\\e[31m✗ Invalid .where() syntax. Use: Model.where('condition')\\e[0m"
       end
     elsif cmd.includes?(".find(")
       # Handle: Session.find(1)
@@ -475,16 +549,49 @@ CON
   puts "\n\e[33m▶ Next steps:\e[0m"
   puts "  \e[36mcd #{app_name}\e[0m"
   puts "  \e[36mshards install\e[0m"
-  puts "  \e[36mkothari server\e[0m"
+  puts "  \e[36mkothari server\e[0m \e[90m[-p|--port PORT]\e[0m"
   puts "\n\e[32mHappy coding! 🚀\e[0m\n"
   exit 0
 end
 
 # ===============================================
-# kothari server
+# kothari server [-p|--port PORT]
 # ===============================================
 if ARGV[0]? == "server"
-  system "crystal run src/server.cr"
+  port = 3000
+  
+  # Parse port flag
+  i = 1
+  while i < ARGV.size
+    arg = ARGV[i]?
+    if arg == "-p" || arg == "--port"
+      if i + 1 < ARGV.size
+        port_str = ARGV[i + 1]?
+        if port_str
+          port = port_str.to_i? || 3000
+          i += 2
+        else
+          i += 1
+        end
+      else
+        puts "\e[31m✗ Error: Port number required after -p/--port flag\e[0m"
+        exit 1
+      end
+    else
+      i += 1
+    end
+  end
+  
+  # Pass port as environment variable - merge with existing environment
+  env = ENV.to_h
+  env["KOTHARI_PORT"] = port.to_s
+  
+  # Use Process.run to ensure environment variable is passed correctly
+  Process.run("crystal", ["run", "src/server.cr"], 
+    env: env,
+    output: Process::Redirect::Inherit,
+    error: Process::Redirect::Inherit
+  )
   exit 0
 end
 
@@ -598,7 +705,19 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
 
   columns_sql = fields.map do |f|
     key, type = f.split(":")
-    "#{key} #{type.upcase}"
+    sql_type = case type.downcase
+               when "string", "text" then "TEXT"
+               when "int", "integer" then "INTEGER"
+               when "bigint", "int64" then "INTEGER"
+               when "float", "double" then "REAL"
+               when "bool", "boolean" then "INTEGER"
+               when "json", "json::any" then "TEXT"
+               when "time", "datetime", "timestamp" then "TEXT"
+               when "uuid" then "TEXT"
+               else
+                 "TEXT"
+               end
+    "#{key} #{sql_type}"
   end.join(", ")
 
   # Add timestamps to all tables
@@ -674,6 +793,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
                    when "bigint", "int64"  then "Int64"
                    when "float", "double"  then "Float64"
                    when "bool", "boolean"  then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
                    else
                      type.camelcase
                    end
@@ -688,6 +810,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
                    when "bigint", "int64"  then "Int64"
                    when "float", "double"  then "Float64"
                    when "bool", "boolean"  then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
                    else
                      type.camelcase
                    end
@@ -903,6 +1028,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "bigint", "int64"   then "Int64"
                    when "float", "double"   then "Float64"
                    when "bool", "boolean"   then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
                    else
                      "String"  # Default to String for unknown types
                    end
@@ -917,6 +1045,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "bigint", "int64"   then "Int64"
                    when "float", "double"   then "Float64"
                    when "bool", "boolean"   then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
                    else
                      "String"  # Default to String for unknown types
                    end
@@ -938,6 +1069,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "bigint", "int64"   then "Int64"
                    when "float", "double"   then "Float64"
                    when "bool", "boolean"   then "Bool"
+                   when "json", "json::any" then "JSON::Any"
+                   when "time", "datetime", "timestamp" then "Time"
+                   when "uuid" then "String"
                    else
                      "String"
                    end
@@ -965,7 +1099,19 @@ MODEL
 
   columns_sql = fields.map do |f|
     key, type = f.split(":")
-    "#{key} #{type.upcase}"
+    sql_type = case type.downcase
+               when "string", "text" then "TEXT"
+               when "int", "integer" then "INTEGER"
+               when "bigint", "int64" then "INTEGER"
+               when "float", "double" then "REAL"
+               when "bool", "boolean" then "INTEGER"
+               when "json", "json::any" then "TEXT"
+               when "time", "datetime", "timestamp" then "TEXT"
+               when "uuid" then "TEXT"
+               else
+                 "TEXT"
+               end
+    "#{key} #{sql_type}"
   end.join(",\n  ")
 
   # Add timestamps to all tables
@@ -1014,6 +1160,9 @@ class #{controller_klass} < KothariAPI::Controller
                          when "bigint", "int64" then "attrs[\"#{key}\"].as_i64? || attrs[\"#{key}\"].to_s.to_i64"
                          when "float", "double" then "attrs[\"#{key}\"].as_f? || attrs[\"#{key}\"].to_s.to_f"
                          when "bool", "boolean" then "attrs[\"#{key}\"].as_bool? || attrs[\"#{key}\"].to_s == \"true\""
+                         when "json", "json::any" then "attrs[\"#{key}\"].as_h? || JSON.parse(attrs[\"#{key}\"].to_s)"
+                         when "time", "datetime", "timestamp" then "Time.parse(attrs[\"#{key}\"].to_s, \"%Y-%m-%d %H:%M:%S\", Time::Location::UTC)"
+                         when "uuid" then "attrs[\"#{key}\"].to_s"
                          else
                            "attrs[\"#{key}\"].to_s"
                          end
@@ -1113,7 +1262,7 @@ CTRL
   puts "  \e[32m•\e[0m Routes for \e[33m/#{plural}\e[0m"
   puts "\n\e[33m▶ Next steps:\e[0m"
   puts "  \e[36mkothari db:migrate\e[0m"
-  puts "  \e[36mkothari server\e[0m"
+  puts "  \e[36mkothari server\e[0m \e[90m[-p|--port PORT]\e[0m"
   puts "\n\e[32mReady to go! 🚀\e[0m\n"
   exit 0
 end
@@ -1129,6 +1278,65 @@ if ARGV[0]? == "console"
   else
     puts "No console.cr found. Are you in a KothariAPI app directory?"
   end
+  exit 0
+end
+
+# ===============================================
+# kothari routes
+# ===============================================
+if ARGV[0]? == "routes"
+  show_intro("routes")
+  
+  unless File.exists?("config/routes.cr")
+    puts "\e[31m✗ Error: config/routes.cr not found\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app directory.\e[0m\n"
+    exit 1
+  end
+
+  # Parse routes file directly to extract route information
+  routes_content = File.read("config/routes.cr")
+  routes = [] of Tuple(String, String, String)
+  
+  # Extract routes using regex
+  route_pattern = /r\.(get|post|put|patch|delete)\s+"([^"]+)",\s+to:\s+"([^"]+)"/
+  routes_content.scan(route_pattern) do |match|
+    method = match[1].upcase
+    path = match[2]
+    controller_action = match[3]
+    routes << {method, path, controller_action}
+  end
+  
+  if routes.empty?
+    puts "\e[33m⚠ No routes found in config/routes.cr\e[0m"
+  else
+    puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
+    puts "\e[32m║                      ROUTES TABLE                         ║\e[0m"
+    puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
+    puts ""
+    puts "\e[33mMethod    Path                    Controller#Action\e[0m"
+    puts "-" * 60
+    
+    routes.each do |method, path, controller_action|
+      method_color = case method
+                    when "GET"    then "\e[32m"
+                    when "POST"   then "\e[33m"
+                    when "PUT"    then "\e[34m"
+                    when "PATCH"  then "\e[35m"
+                    when "DELETE" then "\e[31m"
+                    else               "\e[0m"
+                    end
+      
+      method_str = "#{method_color}#{method.ljust(6)}\e[0m"
+      path_str = path.ljust(22)
+      
+      puts "#{method_str}  #{path_str}  #{controller_action}"
+    end
+    
+    puts ""
+    puts "\e[33mTotal: \e[36m#{routes.size}\e[33m route(s)\e[0m"
+  end
+  
+  puts ""
   exit 0
 end
 
@@ -1281,7 +1489,7 @@ BENCH
   unless server_running
     puts "\e[31m✗ Server is not running on http://127.0.0.1:3000\e[0m"
     puts "\e[33mPlease start the server first:\e[0m"
-    puts "  \e[36mkothari server\e[0m"
+    puts "  \e[36mkothari server\e[0m \e[90m[-p|--port PORT]\e[0m"
     puts "\n\e[33mThen run the benchmark in another terminal:\e[0m"
     puts "  \e[36mkothari benchmark\e[0m\n"
     exit 1
@@ -1299,14 +1507,16 @@ end
 # kothari help (or just kothari)
 # ===============================================
 if ARGV[0]? == "help" || ARGV.empty?
-  show_intro("help")
+  # Show "KOTHARI" for no args, "HELP" for help command
+  command_name = ARGV.empty? ? "kothari" : "help"
+  show_intro(command_name)
 
 puts "\e[36mAvailable Commands:\e[0m\n"
 puts "  \e[33mnew\e[0m \e[90m<app_name>\e[0m"
 puts "     Create a new KothariAPI application"
 puts ""
-puts "  \e[33mserver\e[0m"
-puts "     Start the development server"
+puts "  \e[33mserver\e[0m \e[90m[-p|--port PORT]\e[0m"
+puts "     Start the development server (default: port 3000)"
 puts ""
 puts "  \e[33mbenchmark\e[0m"
 puts "     Run performance benchmarks"
@@ -1334,6 +1544,9 @@ puts "     Generate authentication (User model, AuthController, routes)"
 puts ""
 puts "  \e[33mconsole\e[0m"
 puts "     Open an interactive console"
+puts ""
+puts "  \e[33mroutes\e[0m"
+puts "     List all registered routes"
 puts ""
 puts "\e[32mFor more information, visit: https://github.com/kothari-api\e[0m"
 puts "\e[90mVersion: 1.0.0\e[0m\n"
