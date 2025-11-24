@@ -1,0 +1,24 @@
+name: kothari_api
+version: 0.1.0
+
+description: |
+  KothariAPI is a Rails-style API framework for Crystal with JWT auth, migrations, and a full CLI.
+
+authors:
+  - Shaquel Kothari
+
+license: MIT
+
+crystal: ">= 1.0.0"
+
+dependencies:
+  db:
+    github: crystal-lang/crystal-db
+  sqlite3:
+    github: crystal-lang/crystal-sqlite3
+  jwt:
+    github: crystal-community/jwt
+
+targets:
+  kothari:
+    main: src/cli/kothari.cr
