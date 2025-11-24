@@ -144,7 +144,15 @@ module KothariAPI
           {% id_ivar = ivars.find { |ivar| ivar.name.stringify == "id" } %}
           {% other_ivars = ivars.reject { |ivar| ivar.name.stringify == "id" } %}
           {% if id_ivar %}
-            ; id_val = rs.read({{id_ivar.type}})
+            {% if id_ivar.type.stringify.includes?("Int64?") %}
+              ; id_val : Int64? = rs.read(Int64)
+            {% elsif id_ivar.type.stringify.includes?("Int32?") %}
+              ; id_val : Int32? = rs.read(Int64).to_i32
+            {% elsif id_ivar.type.stringify.includes?("Int64") %}
+              ; id_val = rs.read(Int64)
+            {% else %}
+              ; id_val = rs.read(Int64).as({{id_ivar.type}})
+            {% end %}
           {% end %}
           {% for ivar, index in other_ivars %}
             {% if index == 0 %}

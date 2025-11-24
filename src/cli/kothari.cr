@@ -97,7 +97,7 @@ def show_intro(command_name : String)
   end
   
   puts "║                                                           ║"
-  puts "║              Kothari API Framework                       ║"
+  puts "║               Kothari API Framework                       ║"
   puts "║                                                           ║"
   puts "╚═══════════════════════════════════════════════════════════╝"
   puts "\e[0m" # Reset color
@@ -194,6 +194,7 @@ require "../app/controllers"
 require "../app/models"
 require "../config/routes"
 require "http/server"
+require "mime"
 
 # Auto-connect database
 KothariAPI::DB.connect("db/development.sqlite3")
@@ -202,21 +203,41 @@ server = HTTP::Server.new do |context|
   begin
     method = context.request.method.to_s.upcase
     path = context.request.path
-    route = KothariAPI::Router::Router.match(method, path)
-
-    if route
-      controller_class = KothariAPI::ControllerRegistry.lookup(route.controller)
-
-      if controller_class
-        controller = controller_class.new(context)
-        controller.send(route.action)
+    
+    # Serve static files from public directory
+    if path.starts_with?("/uploads/")
+      file_path = path.lchop("/")
+      full_path = File.join("public", file_path)
+      
+      if File.exists?(full_path) && File.file?(full_path)
+        context.response.content_type = MIME.from_filename(full_path) || "application/octet-stream"
+        context.response.headers["Content-Length"] = File.size(full_path).to_s
+        File.open(full_path) do |file|
+          IO.copy(file, context.response)
+        end
+        next
       else
-        context.response.status = HTTP::Status::INTERNAL_SERVER_ERROR
-        context.response.print({error: "Controller not found"}.to_json)
+        context.response.status = HTTP::Status::NOT_FOUND
+        context.response.print "File not found"
+        next
       end
     else
-      context.response.status = HTTP::Status::NOT_FOUND
-      context.response.print({error: "Not Found"}.to_json)
+      route = KothariAPI::Router::Router.match(method, path)
+
+      if route
+        controller_class = KothariAPI::ControllerRegistry.lookup(route.controller)
+
+        if controller_class
+          controller = controller_class.new(context)
+          controller.send(route.action)
+        else
+          context.response.status = HTTP::Status::INTERNAL_SERVER_ERROR
+          context.response.print({error: "Controller not found"}.to_json)
+        end
+      else
+        context.response.status = HTTP::Status::NOT_FOUND
+        context.response.print({error: "Not Found"}.to_json)
+      end
     end
   rescue ex
     STDERR.puts "Unhandled error: \#{ex.message}"
@@ -383,7 +404,7 @@ require "./app/controllers"
 KothariAPI::DB.connect("db/development.sqlite3")
 
 puts "\e[36m╔═══════════════════════════════════════════════════════════╗\e[0m"
-puts "\e[36m║           KOTHARI API CONSOLE - DATA EXPLORER           ║\e[0m"
+puts "\e[36m║           KOTHARI API CONSOLE - DATA EXPLORER             ║\e[0m"
 puts "\e[36m╚═══════════════════════════════════════════════════════════╝\e[0m"
 puts "\e[33mType 'help' for commands, 'exit' to quit.\e[0m\n"
 
@@ -397,7 +418,7 @@ loop do
   case cmd
   when "help"
     puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
-    puts "\e[32m║                    AVAILABLE COMMANDS                  ║\e[0m"
+    puts "\e[32m║                    AVAILABLE COMMANDS                     ║\e[0m"
     puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
     puts ""
     puts "\e[33m📋 Model Commands:\e[0m"
@@ -875,11 +896,11 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
   system "mkdir -p app/models"
 
   # Add id and timestamp fields to scaffold model
-  id_ivar = "@id : Int32?"
-  id_property = "property id : Int32?"
+  id_ivar = "@id : Int64?"
+  id_property = "property id : Int64?"
   timestamp_ivars = "\n  @created_at : String?\n  @updated_at : String?"
   timestamp_args = ", @created_at : String? = nil, @updated_at : String? = nil"
-  id_arg = ", @id : Int32? = nil"
+  id_arg = ", @id : Int64? = nil"
   
   # Generate property declarations for all fields
   model_properties = fields.map do |f|
@@ -949,19 +970,19 @@ class #{class_name} < KothariAPI::Model
 
   include KothariAPI::Auth::Password
 
-  @id : Int32?
+  @id : Int64?
   @email : String
   @password_digest : String
   @created_at : String?
   @updated_at : String?
 
-  property id : Int32?
+  property id : Int64?
   property email : String
   property password_digest : String
   property created_at : String?
   property updated_at : String?
 
-  def initialize(@email : String, @password_digest : String, @created_at : String? = nil, @updated_at : String? = nil, @id : Int32? = nil)
+  def initialize(@email : String, @password_digest : String, @created_at : String? = nil, @updated_at : String? = nil, @id : Int64? = nil)
   end
 
   KothariAPI::ModelRegistry.register("#{name}", #{class_name})
@@ -1143,11 +1164,11 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
   system "mkdir -p app/models"
 
   # Add id and timestamp fields to model
-  id_ivar = "@id : Int32?"
-  id_property = "property id : Int32?"
+  id_ivar = "@id : Int64?"
+  id_property = "property id : Int64?"
   timestamp_ivars = "\n  @created_at : String?\n  @updated_at : String?"
   timestamp_args = ", @created_at : String? = nil, @updated_at : String? = nil"
-  id_arg = ", @id : Int32? = nil"
+  id_arg = ", @id : Int64? = nil"
   
   # Generate property declarations for all fields
   model_properties = fields.map do |f|

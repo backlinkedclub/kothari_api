@@ -166,6 +166,42 @@ module KothariAPI
       parsed
     end
 
+    # Handle multipart form data (for file uploads)
+    # Returns an array of form data parts
+    def form_data : Array(HTTP::FormData::Part)?
+      content_type = context.request.headers["Content-Type"]?
+      return nil unless content_type && content_type.includes?("multipart/form-data")
+      
+      boundary = content_type.split("boundary=").last?.try &.strip
+      return nil unless boundary
+      
+      body_io = context.request.body
+      return nil unless body_io
+      
+      parts = [] of HTTP::FormData::Part
+      
+      begin
+        HTTP::FormData.parse(body_io, boundary) do |part|
+          parts << part
+        end
+        parts.empty? ? nil : parts
+      rescue ex
+        STDERR.puts "Form data parse error: #{ex.message}" if ENV["DEBUG"]?
+        nil
+      end
+    end
+    
+    # Get uploaded file from form data
+    def uploaded_file(field_name : String) : HTTP::FormData::Part?
+      form = form_data
+      return nil unless form
+      
+      form.each do |part|
+        return part if part.name == field_name && part.filename
+      end
+      nil
+    end
+    
     # Strong params for JSON body – only the listed keys are kept.
     def permit_body(*keys : String) : Hash(String, JSON::Any)
       data = json_body

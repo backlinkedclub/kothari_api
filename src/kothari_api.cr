@@ -13,4 +13,5 @@ require "./kothari_api/model_registry"
 require "./kothari_api/auth/password"
 require "./kothari_api/auth/jwt"
 require "./kothari_api/validations"
+require "./kothari_api/storage"
 
