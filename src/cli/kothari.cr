@@ -42,15 +42,22 @@ if ARGV[0]? == "new"
   system "mkdir -p #{app_name}/db/migrations"
 
   # shard.yml
-  # New apps depend on the published GitHub shard, not a local path.
+  # Prefer a local path to the framework when developing it alongside an app.
+  # Fall back to the published GitHub shard when the local path is not present.
+  dependency_block =
+    if Dir.exists?("kothari_api")
+      # App will live in a sibling directory, so the shard path is ../kothari_api
+      "  kothari_api:\n    path: ../kothari_api\n"
+    else
+      "  kothari_api:\n    github: backlinkedclub/kothari_api\n    version: ~> 0.1.0\n"
+    end
+
   File.write "#{app_name}/shard.yml", <<-YAML
 name: #{app_name}
 version: 0.1.0
 
 dependencies:
-  kothari_api:
-    github: backlinkedclub/kothari_api
-    version: ~> 0.1.0
+#{dependency_block}
 
 targets:
   #{app_name}:
@@ -479,6 +486,44 @@ end
 if ARGV[0]? == "server"
   system "crystal run src/server.cr"
   exit 0
+end
+
+# ===============================================
+# kothari build [output_name] [--release]
+# ===============================================
+if ARGV[0]? == "build"
+  show_intro("build")
+  unless File.exists?("src/server.cr")
+    puts "\e[31m✗ Error: src/server.cr not found\e[0m"
+    puts "\e[33mMake sure you're in a Kothari app root directory (where src/server.cr exists).\e[0m"
+    exit 1
+  end
+
+  # Ensure shards are installed so that `require "kothari_api"` works when compiling.
+  unless Dir.exists?("lib")
+    puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
+    unless system("shards install")
+      puts "\e[31m✗ Error: shards install failed. Please check the output above.\e[0m"
+      exit 1
+    end
+  end
+
+  app_name = File.basename(Dir.current)
+  output   = ARGV[1]? || app_name
+
+  cmd = "crystal build src/server.cr -o #{output}"
+  if ARGV.includes?("--release")
+    cmd += " --release"
+  end
+
+  puts "\e[36m⚡ Building app (#{output})...\e[0m"
+  if system(cmd)
+    puts "\e[32m✓ Build complete: ./#{output}\e[0m"
+    exit 0
+  else
+    puts "\e[31m✗ Build failed. Please review the compiler errors above.\e[0m"
+    exit 1
+  end
 end
 
 # ------------------------------------------

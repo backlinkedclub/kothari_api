@@ -116,6 +116,7 @@ The CLI entry is `src/cli/kothari.cr` and supports:
 
 - **`kothari new <app_name>`** – generate a new app.
 - **`kothari server`** – run `crystal run src/server.cr` in the current app.
+- **`kothari build [output] [--release]`** – compile `src/server.cr` into a binary.
 - **`kothari g controller <name>`** – generate a new controller and route.
 
 ### What `kothari new` Generates
