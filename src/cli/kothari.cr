@@ -721,17 +721,36 @@ end
 # kothari server [-p|--port PORT]
 # ===============================================
 if ARGV[0]? == "server"
+  show_intro("server")
+  
   unless File.exists?("src/server.cr")
     puts "\e[31m✗ Error: src/server.cr not found\e[0m"
-    puts "\e[33mMake sure you're in a Kothari app root directory (where src/server.cr exists).\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app root directory (where src/server.cr exists).\e[0m"
+    puts "\e[33m\nTo create a new app, run: \e[36mkothari new myapp\e[0m\n"
+    exit 1
+  end
+
+  # Check if shard.yml exists
+  unless File.exists?("shard.yml")
+    puts "\e[31m✗ Error: shard.yml not found\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app root directory.\e[0m\n"
     exit 1
   end
 
   # Ensure shards are installed so that `require "kothari_api"` works when compiling.
-  unless Dir.exists?("lib")
+  unless Dir.exists?("lib") && Dir.exists?("lib/kothari_api")
     puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
-    unless system("shards install")
-      puts "\e[31m✗ Error: shards install failed. Please check the output above.\e[0m"
+    result = system("shards install")
+    unless result && $?.success?
+      puts "\e[31m✗ Error: shards install failed\e[0m"
+      puts "\e[33mPlease run 'shards install' manually and check for errors.\e[0m\n"
+      exit 1
+    end
+    
+    # Verify kothari_api was installed
+    unless Dir.exists?("lib/kothari_api")
+      puts "\e[31m✗ Error: kothari_api shard not found after installation\e[0m"
+      puts "\e[33mPlease check your shard.yml configuration.\e[0m\n"
       exit 1
     end
   end
