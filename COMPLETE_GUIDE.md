@@ -1,6 +1,6 @@
 # KothariAPI Framework - Complete Guide
 
-**Version 1.5.0** - Comprehensive documentation for all commands, features, and functions.
+**Version 2.0.0** - Comprehensive documentation for all commands, features, and functions.
 
 ## Table of Contents
 
@@ -1600,10 +1600,13 @@ KothariAPI provides a complete, Rails-inspired framework for building Crystal AP
 - ✅ **Interactive console** for data exploration
 - ✅ **Type-safe** throughout
 
-**Version 1.5.0** includes:
+**Version 2.0.0** includes:
 - Reference type feature
 - Database diagram generation
 - Webhook helper feature
+- Add/remove column migrations
+- Unique constraint support (:uniq)
+- Up/Down migration methods
 - Enhanced help documentation
 
 For more information, visit: https://github.com/backlinkedclub/kothari_api

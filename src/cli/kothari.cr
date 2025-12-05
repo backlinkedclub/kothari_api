@@ -488,6 +488,7 @@ KothariAPI::DB.connect("db/development.sqlite3")
 puts "\e[36m╔═══════════════════════════════════════════════════════════╗\e[0m"
 puts "\e[36m║           KOTHARI API CONSOLE - DATA EXPLORER             ║\e[0m"
 puts "\e[36m╚═══════════════════════════════════════════════════════════╝\e[0m"
+puts "\e[32mVersion: \e[36m2.0.0\e[0m"
 puts "\e[33mType 'help' for commands, 'exit' to quit.\e[0m\n"
 
 loop do
@@ -506,9 +507,12 @@ loop do
     puts "\e[33m📋 Model Commands:\e[0m"
     puts "  \e[36mmodels\e[0m                    - List all registered models"
     puts "  \e[36m<Model>.show\e[0m              - Show table structure (columns & types)"
-    puts "  \e[36m<Model>.all\e[0m               - List all records (e.g. Session.all)"
-    puts "  \e[36m<Model>.where(\\\"condition\\\")\e[0m - Query with WHERE clause (e.g. Session.where(\\\"live = 1\\\"))"
-    puts "  \e[36m<Model>.find(id)\e[0m          - Find record by ID (e.g. Session.find(1))"
+    puts "  \e[36m<Model>.all\e[0m               - List all records (e.g. User.all)"
+    puts "  \e[36m<Model>.where(\\\"condition\\\")\e[0m - Query with WHERE clause (e.g. User.where(\\\"email = 'test@example.com'\\\"))"
+    puts "  \e[36m<Model>.find(id)\e[0m          - Find record by ID (e.g. User.find(1))"
+    puts "  \e[36m<Model>.create(...)\e[0m       - Create new record"
+    puts "  \e[36m<Model>.update(id, ...)\e[0m   - Update record by ID"
+    puts "  \e[36m<Model>.delete(id)\e[0m        - Delete record by ID"
     puts ""
     puts "\e[33m🗄️  SQL Commands:\e[0m"
     puts "  \e[36msql SELECT ...\e[0m           - Run SELECT query"
@@ -518,8 +522,11 @@ loop do
     puts "  \e[36msql CREATE TABLE ...\e[0m     - Create table"
     puts "  \e[36msql DROP TABLE ...\e[0m        - Drop table"
     puts "  \e[36msql .schema <table>\e[0m      - Show table schema"
+    puts "  \e[36msql ALTER TABLE ...\e[0m      - Alter table structure"
     puts ""
     puts "\e[33m🔧 Utility:\e[0m"
+    puts "  \e[36mhelp\e[0m                      - Show this help message"
+    puts "  \e[36mversion\e[0m                   - Show KothariAPI version"
     puts "  \e[36mexit\e[0m                      - Quit console"
     puts ""
   when "models"
@@ -530,6 +537,9 @@ loop do
       puts "\e[32m✓ Registered Models:\e[0m"
       names.each { |n| puts "  \e[36m• \#{n.capitalize}\e[0m" }
     end
+  when "version"
+    puts "\e[32mKothariAPI Framework \e[36m2.0.0\e[0m"
+    puts "\e[33mFor more info: https://github.com/backlinkedclub/kothari_api\e[0m"
   else
     if cmd.starts_with?("sql ")
       query = cmd[4..].strip
