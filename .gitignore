@@ -14,7 +14,6 @@ test_*/
 demo_*/
 auth_*/
 space_*/
-user_*/
 *_app/
 *_test/
 *_build/
@@ -40,3 +39,13 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.cache
+
+# Internal documentation (not for public)
+ERRORS.md
+READY_FOR_GITHUB.md
+TEST_ERRORS_README.md
+TEST_SUMMARY.md
+TESTING_GUIDE.md
+DEV_TO_POST.md
+CHATGPT_TEST_PROMPTS.md
+JSON_HELPERS_DEMO.md
