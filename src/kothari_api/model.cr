@@ -154,8 +154,8 @@ module KothariAPI
           case value.raw
           when String then value.as_s
           when Int64 then value.as_i64
-          when Int32 then value.as_i32
-          when Float64 then value.as_f64
+          when Int32 then value.as_i
+          when Float64 then value.as_f
           when Bool then value.as_bool
           when Nil then nil
           when Hash then value.to_json

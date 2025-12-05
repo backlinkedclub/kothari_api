@@ -1219,7 +1219,7 @@ class AuthController < KothariAPI::Controller
     # Include user_id in JWT for easier lookup
     token = KothariAPI::Auth::JWTAuth.issue_simple({
       "email" => email.not_nil!,
-      "user_id" => user.id.not_nil!
+      "user_id" => user.id.not_nil!.to_i32
     })
     context.response.status = HTTP::Status::CREATED
     json({token: token, email: email.not_nil!, user_id: user.id})
@@ -1246,7 +1246,7 @@ class AuthController < KothariAPI::Controller
     # Include user_id in JWT for easier lookup
     token = KothariAPI::Auth::JWTAuth.issue_simple({
       "email" => email.not_nil!,
-      "user_id" => user.id.not_nil!
+      "user_id" => user.id.not_nil!.to_i32.to_i32
     })
     context.response.status = HTTP::Status::OK
     json({token: token, email: email.not_nil!, user_id: user.id})
@@ -1493,7 +1493,7 @@ class #{controller_klass} < KothariAPI::Controller
       )
       json_post(record)
     rescue ex
-      unprocessable_entity("Failed to create #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+      unprocessable_entity("Failed to create #{class_name}", {"error" => [ex.message || "Unknown error"]})
     end
   end
 
@@ -1522,7 +1522,7 @@ class #{controller_klass} < KothariAPI::Controller
         unprocessable_entity("Failed to update #{class_name}")
       end
     rescue ex
-      unprocessable_entity("Failed to update #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+      unprocessable_entity("Failed to update #{class_name}", {"error" => [ex.message || "Unknown error"]})
     end
   end
 
@@ -1548,7 +1548,7 @@ class #{controller_klass} < KothariAPI::Controller
         internal_server_error("Failed to delete #{class_name}")
       end
     rescue ex
-      internal_server_error("Failed to delete #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+      internal_server_error("Failed to delete #{class_name}")
     end
   end
   def destroy

@@ -187,8 +187,9 @@ module KothariAPI
     def unprocessable_entity(message : String = "Unprocessable Entity", errors : Hash(String, Array(String))? = nil)
       context.response.status = HTTP::Status::UNPROCESSABLE_ENTITY
       context.response.content_type = "application/json"
-      error_data = {"error" => message}
-      error_data["errors"] = errors if errors
+      error_data = {} of String => JSON::Any
+      error_data["error"] = JSON::Any.new(message)
+      error_data["errors"] = JSON::Any.new(errors.to_json) if errors
       context.response.print error_data.to_json
     end
 
