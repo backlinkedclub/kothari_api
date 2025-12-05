@@ -142,6 +142,7 @@ kothari g model article title:string content:text views:integer
 - `json`, `json::any` → `JSON::Any`
 - `time`, `datetime`, `timestamp` → `Time`
 - `uuid` → `String`
+- `reference`, `ref` → `Int32` (creates foreign key with index, e.g., `user_id:reference`)
 
 #### `kothari g migration <name> [field:type ...]`
 
@@ -294,6 +295,46 @@ kothari console
 ```
 
 **Note:** The console automatically installs shards if needed. Make sure you're in your KothariAPI app directory.
+
+**Console Commands:**
+
+#### `kothari diagram`
+
+Generates a visual database schema diagram showing all tables, fields, and relationships.
+
+```bash
+kothari diagram
+```
+
+This command:
+- Scans all migrations in `db/migrations/`
+- Extracts table structures and field types
+- Identifies relationships via `reference` fields (e.g., `user_id:reference`)
+- Generates a Mermaid ER diagram saved to `db/diagram.md`
+
+**Example:**
+
+```bash
+# Create models with references
+kothari g model profile user_id:reference name:string bio:text
+kothari g migration create_profiles user_id:reference name:string bio:text
+
+# Generate diagram
+kothari diagram
+```
+
+The diagram can be viewed in:
+- GitHub (renders Mermaid automatically)
+- VS Code (with Mermaid extension)
+- Online at https://mermaid.live
+
+**Reference Type:**
+
+The `reference` type (or `ref`) creates a foreign key relationship:
+- Creates an `INTEGER` field in the database
+- Automatically adds an index for performance
+- Tracks the relationship for diagram generation
+- Example: `user_id:reference` creates `user_id INTEGER` with index
 
 **Console Commands:**
 ```ruby

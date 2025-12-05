@@ -40,14 +40,15 @@ module KothariAPI
 
     # Check if a callback should run for a given action
     private def should_run_callback?(action : String, only : Array(Symbol)?, except : Array(Symbol)?) : Bool
-      action_sym = action.to_sym
+      # Convert action string to symbol for comparison
+      action_str = action
       
       if only
-        return only.includes?(action_sym)
+        return only.any? { |sym| sym.to_s == action_str }
       end
       
       if except
-        return !except.includes?(action_sym)
+        return !except.any? { |sym| sym.to_s == action_str }
       end
       
       true

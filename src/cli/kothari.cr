@@ -206,8 +206,8 @@ KothariAPI::CORS.configure(
 
   # exposed_headers: Response headers that clients can read
   #   - These headers are made available to JavaScript in the browser
-  #   - Leave empty [] if you don't need to expose custom headers
-  exposed_headers: [],
+  #   - Leave empty [] of String if you don't need to expose custom headers
+  exposed_headers: [] of String,
 
   # max_age: How long (in seconds) browsers can cache preflight responses
   #   - 3600 = 1 hour (default)
@@ -738,7 +738,12 @@ if ARGV[0]? == "server"
   end
 
   # Ensure shards are installed so that `require "kothari_api"` works when compiling.
-  unless Dir.exists?("lib") && Dir.exists?("lib/kothari_api")
+  # Check if lib directory exists (shards might be installed)
+  # Also check shard.yml to see if kothari_api uses path (local development)
+  shard_yml_content = File.read("shard.yml") rescue ""
+  uses_path_dependency = shard_yml_content.includes?("path:")
+  
+  unless Dir.exists?("lib")
     puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
     result = system("shards install")
     unless result && $?.success?
@@ -746,11 +751,30 @@ if ARGV[0]? == "server"
       puts "\e[33mPlease run 'shards install' manually and check for errors.\e[0m\n"
       exit 1
     end
-    
-    # Verify kothari_api was installed
-    unless Dir.exists?("lib/kothari_api")
-      puts "\e[31m✗ Error: kothari_api shard not found after installation\e[0m"
-      puts "\e[33mPlease check your shard.yml configuration.\e[0m\n"
+  end
+  
+  # If using path dependency, verify the path exists
+  if uses_path_dependency
+    # Extract path from shard.yml
+    path_match = shard_yml_content.match(/path:\s*(.+)/)
+    if path_match
+      kothari_path = path_match[1].strip
+      # Resolve relative path
+      full_path = File.expand_path(kothari_path, Dir.current)
+      unless Dir.exists?(full_path) && File.exists?(File.join(full_path, "src", "kothari_api.cr"))
+        puts "\e[31m✗ Error: kothari_api path dependency not found\e[0m"
+        puts "\e[33mExpected path: #{full_path}\e[0m"
+        puts "\e[33mPlease check your shard.yml configuration.\e[0m\n"
+        exit 1
+      end
+    end
+  elsif !Dir.exists?("lib/kothari_api")
+    # For non-path dependencies, verify kothari_api is in lib
+    puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
+    result = system("shards install")
+    unless result && $?.success?
+      puts "\e[31m✗ Error: shards install failed\e[0m"
+      puts "\e[33mPlease run 'shards install' manually and check for errors.\e[0m\n"
       exit 1
     end
   end
@@ -902,6 +926,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
 
   fields = ARGV[3..] || [] of String
 
+  # Track references for indexing
+  reference_fields = [] of String
+  
   columns_sql = fields.map do |f|
     key, type = f.split(":")
     sql_type = case type.downcase
@@ -913,6 +940,9 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
                when "json", "json::any" then "TEXT"
                when "time", "datetime", "timestamp" then "TEXT"
                when "uuid" then "TEXT"
+               when "reference", "ref" then
+                 reference_fields << key
+                 "INTEGER"
                else
                  "TEXT"
                end
@@ -933,11 +963,15 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
   # Add timestamps to all tables
   timestamp_columns = ",\n  created_at TEXT DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT DEFAULT CURRENT_TIMESTAMP"
   
+  # Generate index statements for reference fields
+  index_statements = reference_fields.map { |field| "CREATE INDEX IF NOT EXISTS idx_#{table_name}_#{field} ON #{table_name}(#{field});" }.join("\n")
+  
   File.write filename, <<-SQL
 CREATE TABLE IF NOT EXISTS #{table_name} (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   #{columns_sql}#{timestamp_columns}
 );
+#{index_statements}
 SQL
 
   show_intro("generate migration #{name}")
@@ -1022,6 +1056,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      type.camelcase
                    end
@@ -1039,6 +1074,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      type.camelcase
                    end
@@ -1066,6 +1102,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "model"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      "String"
                    end
@@ -1299,6 +1336,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      "String"  # Default to String for unknown types
                    end
@@ -1316,6 +1354,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      "String"  # Default to String for unknown types
                    end
@@ -1343,6 +1382,7 @@ if ARGV[0]? == "g" && ARGV[1]? == "scaffold"
                    when "json", "json::any" then "JSON::Any"
                    when "time", "datetime", "timestamp" then "Time"
                    when "uuid" then "String"
+                   when "reference", "ref" then "Int32"  # Reference becomes Int32
                    else
                      "String"
                    end
@@ -1370,6 +1410,9 @@ MODEL
   timestamp = Time.utc.to_unix_ms.to_s
   mig_filename = "db/migrations/#{timestamp}_create_#{plural}.sql"
 
+  # Track references for indexing
+  reference_fields = [] of String
+  
   columns_sql = fields.map do |f|
     key, type = f.split(":")
     sql_type = case type.downcase
@@ -1381,6 +1424,9 @@ MODEL
                when "json", "json::any" then "TEXT"
                when "time", "datetime", "timestamp" then "TEXT"
                when "uuid" then "TEXT"
+               when "reference", "ref" then
+                 reference_fields << key
+                 "INTEGER"
                else
                  "TEXT"
                end
@@ -1390,10 +1436,14 @@ MODEL
   # Add timestamps to all tables
   timestamp_columns = ",\n  created_at TEXT DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT DEFAULT CURRENT_TIMESTAMP"
   
+  # Generate index statements for reference fields
+  index_statements = reference_fields.map { |field| "CREATE INDEX IF NOT EXISTS idx_#{plural}_#{field} ON #{plural}(#{field});" }.join("\n")
+  
   File.write mig_filename, <<-SQL
 CREATE TABLE IF NOT EXISTS #{plural} (
   id INTEGER PRIMARY KEY AUTOINCREMENT#{fields.empty? ? "" : ",\n  " + columns_sql}#{timestamp_columns}
 );
+#{index_statements}
 SQL
 
   # 3) Controller
@@ -2165,6 +2215,129 @@ BENCH
 end
 
 # ===============================================
+# kothari diagram
+# ===============================================
+if ARGV[0]? == "diagram"
+  show_intro("diagram")
+  
+  unless Dir.exists?("db/migrations")
+    puts "\e[33m⚠ No migrations directory found. Create some models/migrations first.\e[0m"
+    exit 0
+  end
+  
+  puts "\e[36m⚡ Analyzing database schema...\e[0m"
+  
+  # Parse migrations to extract tables, fields, and relationships
+  tables = {} of String => Hash(String, String)  # table_name => {field => type}
+  relationships = [] of {String, String, String}  # [from_table, to_table, field]
+  
+  Dir.glob("db/migrations/*.sql").each do |migration_file|
+    content = File.read(migration_file)
+    
+    # Extract table name from CREATE TABLE statement
+    if match = content.match(/CREATE TABLE IF NOT EXISTS (\w+)/)
+      table_name = match[1]
+      tables[table_name] = {} of String => String
+      
+      # Extract columns
+      content.scan(/(\w+)\s+(TEXT|INTEGER|REAL|BLOB)/) do |col_match|
+        field_name = col_match[1]
+        field_type = col_match[2]
+        
+        # Skip id, created_at, updated_at
+        next if field_name == "id" || field_name == "created_at" || field_name == "updated_at"
+        
+        tables[table_name][field_name] = field_type
+      end
+      
+      # Check for reference fields (fields ending in _id that are INTEGER)
+      tables[table_name].each do |field_name, field_type|
+        if field_name.ends_with?("_id") && field_type == "INTEGER"
+          # Infer referenced table: user_id -> users, post_id -> posts
+          referenced_table = if field_name == "user_id"
+                               "users"
+                             else
+                               # Remove _id suffix and pluralize
+                               base = field_name.sub(/_id$/, "")
+                               "#{base}s"
+                             end
+          
+          relationships << {table_name, referenced_table, field_name}
+        end
+      end
+    end
+  end
+  
+  if tables.empty?
+    puts "\e[33m⚠ No tables found in migrations.\e[0m"
+    exit 0
+  end
+  
+  # Generate Mermaid ER diagram
+  diagram_content = <<-DIAGRAM
+# Database Schema Diagram
+
+This diagram shows the relationships between all tables in your database.
+
+\`\`\`mermaid
+erDiagram
+DIAGRAM
+
+  # Add all tables with their fields
+  tables.each do |table_name, fields|
+    diagram_content += "\n  #{table_name} {\n"
+    diagram_content += "    Int64 id PK\n"
+    fields.each do |field_name, field_type|
+      # Format field type nicely
+      display_type = case field_type
+                     when "INTEGER" then "Int32"
+                     when "TEXT" then "String"
+                     when "REAL" then "Float64"
+                     when "BLOB" then "Blob"
+                     else field_type
+                     end
+      
+      # Mark reference fields
+      if field_name.ends_with?("_id")
+        diagram_content += "    #{display_type} #{field_name} FK\n"
+      else
+        diagram_content += "    #{display_type} #{field_name}\n"
+      end
+    end
+    diagram_content += "    String created_at\n"
+    diagram_content += "    String updated_at\n"
+    diagram_content += "  }\n"
+  end
+  
+  # Add relationships
+  relationships.each do |from_table, to_table, field|
+    # Only add if the referenced table exists
+    if tables.has_key?(to_table)
+      diagram_content += "\n  #{from_table} ||--o{ #{to_table} : \"#{field}\"\n"
+    end
+  end
+  
+  diagram_content += "\n```\n"
+  diagram_content += "\n## Legend\n"
+  diagram_content += "- **PK** = Primary Key\n"
+  diagram_content += "- **FK** = Foreign Key (Reference)\n"
+  diagram_content += "- Relationships show one-to-many (one table can have many related records)\n"
+  
+  # Ensure db directory exists
+  system "mkdir -p db"
+  
+  # Write diagram to file
+  File.write("db/diagram.md", diagram_content)
+  
+  puts "\e[32m✓\e[0m Generated database diagram: \e[36mdb/diagram.md\e[0m"
+  puts "\e[36m\n▶ View the diagram in:\e[0m"
+  puts "  - GitHub (renders Mermaid automatically)"
+  puts "  - VS Code (with Mermaid extension)"
+  puts "  - Online: https://mermaid.live\n"
+  exit 0
+end
+
+# ===============================================
 # kothari help (or just kothari)
 # ===============================================
 if ARGV[0]? == "help" || ARGV.empty?
@@ -2209,6 +2382,9 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts ""
   puts "  \e[36mkothari db:reset\e[0m"
   puts "     Drop, create, and migrate the database"
+  puts ""
+  puts "  \e[36mkothari diagram\e[0m"
+  puts "     Generate database schema diagram (Mermaid ER diagram)"
   puts ""
   puts "\e[33m🛠️  Utilities:\e[0m"
   puts "  \e[36mkothari routes\e[0m"
