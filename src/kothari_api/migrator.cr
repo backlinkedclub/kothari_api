@@ -19,12 +19,61 @@ module KothariAPI
 
         puts "Applying #{File.basename(file)}..."
         sql = File.read(file)
-        KothariAPI::DB.conn.exec(sql)
+        
+        # Extract UP section if migration has up/down structure
+        up_sql = extract_up_section(sql)
+        
+        # Skip if UP section is empty (e.g., comment-only migrations)
+        if up_sql.strip.empty?
+          puts "  ⚠ Skipping #{File.basename(file)} (empty UP section - may require manual intervention)"
+          record_version(version)
+          next
+        end
+        
+        # Execute the UP section (or entire file if no up/down structure)
+        KothariAPI::DB.conn.exec(up_sql)
 
         record_version(version)
       end
 
       puts "Migrations complete."
+    end
+
+    # Extract the UP section from a migration file
+    # Migrations can have:
+    #   -- UP
+    #   <sql statements>
+    #   -- DOWN
+    #   <sql statements>
+    def self.extract_up_section(sql : String) : String
+      # Check if migration has up/down structure
+      if sql.includes?("-- UP") && sql.includes?("-- DOWN")
+        # Extract everything between -- UP and -- DOWN
+        parts = sql.split("-- DOWN")
+        up_part = parts[0]
+        # Remove the -- UP comment line and any leading comments
+        up_part = up_part.sub(/^.*?-- UP\s*\n?/m, "")
+        # Remove comment-only lines (lines that are only comments or whitespace)
+        up_part = up_part.lines.reject { |line| line.strip.empty? || line.strip.starts_with?("--") }.join("\n")
+        up_part.strip
+      else
+        # No up/down structure, return entire file
+        sql
+      end
+    end
+
+    # Extract the DOWN section from a migration file (for rollback)
+    def self.extract_down_section(sql : String) : String?
+      if sql.includes?("-- UP") && sql.includes?("-- DOWN")
+        parts = sql.split("-- DOWN")
+        return nil if parts.size < 2
+        down_part = parts[1]
+        # Remove any trailing comments
+        down_part = down_part.sub(/^.*?-- DOWN\s*\n?/m, "")
+        down_part.strip
+      else
+        nil
+      end
     end
 
     # List of applied migration versions as strings.

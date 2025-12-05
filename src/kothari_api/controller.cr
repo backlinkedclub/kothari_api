@@ -456,6 +456,35 @@ module KothariAPI
       user = current_user
       user.try &.id
     end
+
+    # -------- Webhook Helper --------
+    
+    # Webhook helper macro - generates webhook methods
+    # Usage:
+    #   webhook "incoming_call" do
+    #     data = json_body
+    #     # Process webhook data
+    #     json({status: "received"})
+    #   end
+    #
+    # After adding webhook() calls, run: kothari webhook:routes
+    # to automatically add routes to config/routes.cr
+    macro webhook(method_name, &block)
+      {% 
+        method_name_str = method_name.id.stringify
+        controller_class_name = @type.name
+        # Extract base name from controller class (e.g., TwilioWebhookController -> twilio_webhook)
+        controller_name_underscore = controller_class_name.underscore
+        base_name = controller_name_underscore.gsub(/_webhook_controller$/, "")
+        route_path = "/webhooks/#{base_name}/#{method_name_str}"
+      %}
+      
+      # Webhook endpoint: {{route_path}}
+      # Auto-route: POST {{route_path}} -> {{controller_name_underscore}}#{{method_name_str}}
+      def {{method_name.id}}
+        {{block.body}}
+      end
+    end
   end
 end
 

@@ -16,7 +16,8 @@
 10. [Authentication](#authentication)
 11. [Reference Type Feature](#reference-type-feature)
 12. [Database Diagram Feature](#database-diagram-feature)
-13. [Advanced Examples](#advanced-examples)
+13. [Webhook Helper Feature](#webhook-helper-feature)
+14. [Advanced Examples](#advanced-examples)
 
 ---
 
@@ -1602,6 +1603,7 @@ KothariAPI provides a complete, Rails-inspired framework for building Crystal AP
 **Version 1.5.0** includes:
 - Reference type feature
 - Database diagram generation
+- Webhook helper feature
 - Enhanced help documentation
 
 For more information, visit: https://github.com/backlinkedclub/kothari_api

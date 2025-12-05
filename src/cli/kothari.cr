@@ -916,7 +916,13 @@ end
 # ===============================================
 if ARGV[0]? == "g" && ARGV[1]? == "migration"
   if ARGV[2]?.nil?
-    puts "Usage: kothari g migration <name> field:type field:type ..."
+    puts "Usage: kothari g migration <name> [field:type ...]"
+    puts ""
+    puts "Examples:"
+    puts "  kothari g migration create_users email:string password:string"
+    puts "  kothari g migration add_name_to_users name:string"
+    puts "  kothari g migration remove_email_from_users email:string"
+    puts "  kothari g migration add_email_to_users email:string:uniq"
     exit 1
   end
 
@@ -926,11 +932,152 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
 
   fields = ARGV[3..] || [] of String
 
+  # Check if this is an add_column migration
+  if name.match(/^add_(.+)_to_(.+)$/) || name.match(/^add_column_to_(.+)$/)
+    # Extract table name and column info
+    table_match = name.match(/^add_(.+)_to_(.+)$/)
+    if table_match
+      column_name = table_match[1]
+      table_name = table_match[2]
+    else
+      table_match = name.match(/^add_column_to_(.+)$/)
+      table_name = table_match[1] if table_match
+      column_name = fields[0]?.try &.split(":")[0] || ""
+    end
+    
+    # Parse field type and options
+    field_spec = fields[0]? || "#{column_name}:string"
+    parts = field_spec.split(":")
+    col_name = parts[0]
+    col_type = parts[1]? || "string"
+    is_unique = parts.includes?("uniq") || field_spec.includes?(":uniq")
+    
+    sql_type = case col_type.downcase
+               when "string", "text" then "TEXT"
+               when "int", "integer" then "INTEGER"
+               when "bigint", "int64" then "INTEGER"
+               when "float", "double" then "REAL"
+               when "bool", "boolean" then "INTEGER"
+               when "json", "json::any" then "TEXT"
+               when "time", "datetime", "timestamp" then "TEXT"
+               when "uuid" then "TEXT"
+               when "reference", "ref" then "INTEGER"
+               else
+                 "TEXT"
+               end
+    
+    # Generate migration with up/down methods
+    up_sql = "ALTER TABLE #{table_name} ADD COLUMN #{col_name} #{sql_type};"
+    if is_unique
+      up_sql += "\nCREATE UNIQUE INDEX IF NOT EXISTS idx_#{table_name}_#{col_name}_unique ON #{table_name}(#{col_name});"
+    end
+    
+    down_sql = "ALTER TABLE #{table_name} DROP COLUMN #{col_name};"
+    if is_unique
+      down_sql = "DROP INDEX IF EXISTS idx_#{table_name}_#{col_name}_unique;\n" + down_sql
+    end
+    
+    File.write filename, <<-SQL
+-- Migration: #{name}
+-- Up: Add column #{col_name} to #{table_name}
+-- Down: Remove column #{col_name} from #{table_name}
+
+-- UP
+#{up_sql}
+
+-- DOWN
+#{down_sql}
+SQL
+
+    show_intro("generate migration #{name}")
+    puts "\e[32m✓\e[0m Created migration: \e[36m#{filename}\e[0m"
+    puts "\e[36m\n▶ Next: Run \e[33mkothari db:migrate\e[36m to apply migrations\e[0m\n"
+    exit 0
+  end
+
+  # Check if this is a remove_column migration
+  if name.match(/^remove_(.+)_from_(.+)$/) || name.match(/^remove_column_from_(.+)$/)
+    # Extract table name and column info
+    table_match = name.match(/^remove_(.+)_from_(.+)$/)
+    if table_match
+      column_name = table_match[1]
+      table_name = table_match[2]
+    else
+      table_match = name.match(/^remove_column_from_(.+)$/)
+      table_name = table_match[1] if table_match
+      column_name = fields[0]?.try &.split(":")[0] || ""
+    end
+    
+    # Get column type for down migration (recreate)
+    field_spec = fields[0]? || "#{column_name}:string"
+    parts = field_spec.split(":")
+    col_name = parts[0]
+    col_type = parts[1]? || "string"
+    is_unique = parts.includes?("uniq") || field_spec.includes?(":uniq")
+    
+    sql_type = case col_type.downcase
+               when "string", "text" then "TEXT"
+               when "int", "integer" then "INTEGER"
+               when "bigint", "int64" then "INTEGER"
+               when "float", "double" then "REAL"
+               when "bool", "boolean" then "INTEGER"
+               when "json", "json::any" then "TEXT"
+               when "time", "datetime", "timestamp" then "TEXT"
+               when "uuid" then "TEXT"
+               when "reference", "ref" then "INTEGER"
+               else
+                 "TEXT"
+               end
+    
+    # Generate migration with up/down methods
+    # Note: SQLite doesn't support DROP COLUMN directly, so we'll use a workaround
+    up_sql = "-- SQLite doesn't support DROP COLUMN directly.\n"
+    up_sql += "-- You'll need to recreate the table without this column.\n"
+    up_sql += "-- See: https://www.sqlite.org/lang_altertable.html\n"
+    up_sql += "-- For now, this migration marks the column as deprecated.\n"
+    up_sql += "-- ALTER TABLE #{table_name} DROP COLUMN #{col_name};"
+    
+    down_sql = "ALTER TABLE #{table_name} ADD COLUMN #{col_name} #{sql_type};"
+    if is_unique
+      down_sql += "\nCREATE UNIQUE INDEX IF NOT EXISTS idx_#{table_name}_#{col_name}_unique ON #{table_name}(#{col_name});"
+    end
+    
+    File.write filename, <<-SQL
+-- Migration: #{name}
+-- Up: Remove column #{col_name} from #{table_name}
+-- Down: Add column #{col_name} back to #{table_name}
+-- Note: SQLite doesn't support DROP COLUMN. See comments in UP section.
+
+-- UP
+#{up_sql}
+
+-- DOWN
+#{down_sql}
+SQL
+
+    show_intro("generate migration #{name}")
+    puts "\e[32m✓\e[0m Created migration: \e[36m#{filename}\e[0m"
+    puts "\e[33m⚠ Note: SQLite doesn't support DROP COLUMN directly.\e[0m"
+    puts "\e[33m  You may need to manually recreate the table.\e[0m"
+    puts "\e[36m\n▶ Next: Run \e[33mkothari db:migrate\e[36m to apply migrations\e[0m\n"
+    exit 0
+  end
+
+  # Regular create table migration
   # Track references for indexing
   reference_fields = [] of String
+  unique_fields = [] of String
   
   columns_sql = fields.map do |f|
-    key, type = f.split(":")
+    parts = f.split(":")
+    key = parts[0]
+    type = parts[1]? || "string"
+    is_unique = parts.includes?("uniq") || f.includes?(":uniq")
+    
+    if is_unique
+      unique_fields << key
+    end
+    
     sql_type = case type.downcase
                when "string", "text" then "TEXT"
                when "int", "integer" then "INTEGER"
@@ -966,12 +1113,30 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
   # Generate index statements for reference fields
   index_statements = reference_fields.map { |field| "CREATE INDEX IF NOT EXISTS idx_#{table_name}_#{field} ON #{table_name}(#{field});" }.join("\n")
   
-  File.write filename, <<-SQL
+  # Generate unique index statements
+  unique_index_statements = unique_fields.map { |field| "CREATE UNIQUE INDEX IF NOT EXISTS idx_#{table_name}_#{field}_unique ON #{table_name}(#{field});" }.join("\n")
+  
+  up_sql = <<-SQL
 CREATE TABLE IF NOT EXISTS #{table_name} (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   #{columns_sql}#{timestamp_columns}
 );
 #{index_statements}
+#{unique_index_statements}
+SQL
+
+  down_sql = "DROP TABLE IF EXISTS #{table_name};"
+  
+  File.write filename, <<-SQL
+-- Migration: #{name}
+-- Up: Create table #{table_name}
+-- Down: Drop table #{table_name}
+
+-- UP
+#{up_sql}
+
+-- DOWN
+#{down_sql}
 SQL
 
   show_intro("generate migration #{name}")
@@ -1297,6 +1462,76 @@ MODELS
   puts "\e[32m✓\e[0m Created \e[36mAuthController\e[0m with /signup and /login"
   puts "\e[32m✓\e[0m Added routes \e[33mPOST /signup\e[0m and \e[33mPOST /login\e[0m"
   puts "\e[36m\n▶ Next: Run \e[33mkothari db:migrate\e[36m then use /signup and /login\e[0m\n"
+  exit 0
+end
+
+# ===============================================
+# kothari webhook <name>
+# ===============================================
+if ARGV[0]? == "webhook"
+  if ARGV[1]?.nil?
+    puts "Usage: kothari webhook <name>"
+    puts "Example: kothari webhook twilio"
+    exit 1
+  end
+
+  name = ARGV[1].downcase
+  class_name = name.camelcase
+
+  controller_path = "app/controllers/#{name}_webhook_controller.cr"
+  routes_path     = "config/routes.cr"
+
+  # Create webhook controller file
+  File.write controller_path, <<-CTRL
+require "../../../src/kothari_api/controller"
+
+class #{class_name}WebhookController < KothariAPI::Controller
+  # Webhook endpoints are created using the webhook() helper
+  # 
+  # Example usage:
+  #   webhook "incoming_call" do
+  #     # Handle incoming call webhook
+  #     data = json_body
+  #     # Process webhook data
+  #     json({status: "received"})
+  #   end
+  #
+  # After adding webhook() calls, run: kothari webhook:routes
+  # This will automatically add routes like: POST /webhooks/#{name}/incoming_call
+end
+
+KothariAPI::ControllerRegistry.register("#{name}_webhook", #{class_name}WebhookController)
+CTRL
+
+  # Read routes file
+  routes = File.read(routes_path).lines
+
+  # Find the last "end"
+  end_index = routes.rindex { |l| l.strip == "end" }
+
+  if end_index.nil?
+    # No `end`? Just append at bottom
+    File.open(routes_path, "a") do |f|
+      f.puts "  # Webhook routes for #{name} (auto-generated by Webhook() helper)"
+    end
+  else
+    # Insert comment BEFORE last end
+    routes.insert(end_index, "  # Webhook routes for #{name} (auto-generated by Webhook() helper)")
+    File.write(routes_path, routes.join("\n") + "\n")
+  end
+
+  show_intro("generate webhook #{name}")
+  puts "\e[32m✓\e[0m Created webhook controller \e[36m#{class_name}WebhookController\e[0m"
+  puts "\e[36m\n▶ Next steps:\e[0m"
+  puts "  1. Add webhook methods using Webhook() helper in app/controllers/#{name}_webhook_controller.cr"
+  puts "  2. Run: \e[33mkothari webhook:routes\e[36m to automatically add routes\n"
+  puts "\e[36m  Example:\e[0m"
+  puts "    \e[33mwebhook \"incoming_call\" do\e[0m"
+  puts "      \e[33mdata = json_body\e[0m"
+  puts "      \e[33m# Process webhook\e[0m"
+  puts "      \e[33mjson({status: \"received\"})\e[0m"
+  puts "    \e[33mend\e[0m"
+  puts ""
   exit 0
 end
 
@@ -2215,6 +2450,112 @@ BENCH
 end
 
 # ===============================================
+# kothari webhook:routes
+# ===============================================
+if ARGV[0]? == "webhook:routes"
+  show_intro("webhook:routes")
+  
+  unless Dir.exists?("app/controllers")
+    puts "\e[33m⚠ No controllers directory found.\e[0m"
+    exit 0
+  end
+  
+  routes_path = "config/routes.cr"
+  unless File.exists?(routes_path)
+    puts "\e[33m⚠ No routes file found at #{routes_path}\e[0m"
+    exit 0
+  end
+  
+  puts "\e[36m⚡ Scanning controllers for webhook methods...\e[0m"
+  
+  webhook_routes = [] of {String, String, String}  # [path, controller, action]
+  
+  # Scan all controller files
+  Dir.glob("app/controllers/*_webhook_controller.cr").each do |controller_file|
+    content = File.read(controller_file)
+    
+    # Extract controller name from file (e.g., twilio_webhook_controller.cr -> twilio_webhook)
+    controller_file_name = File.basename(controller_file, ".cr")
+    # Controller name for routes should match the registry name (without _controller suffix)
+    controller_name = controller_file_name.gsub(/_controller$/, "")
+    
+    # Extract base name (twilio_webhook_controller -> twilio)
+    base_name = controller_file_name.gsub(/_webhook_controller$/, "").gsub(/_webhook$/, "")
+    
+    # Find webhook macro calls: webhook "method_name" do
+    content.scan(/webhook\s+"(\w+)"/) do |match|
+      method_name = match[1]
+      route_path = "/webhooks/#{base_name}/#{method_name}"
+      # Check if this method is already in our list
+      next if webhook_routes.any? { |r| r[2] == method_name && r[1] == controller_name }
+      webhook_routes << {route_path, controller_name, method_name}
+    end
+    
+    # Also look for methods that have the webhook comment pattern (from macro expansion)
+    content.scan(/def (\w+)\s*\n\s*# Webhook endpoint: (\/webhooks\/[^\n]+)/m) do |match|
+      method_name = match[1]
+      route_path = match[2].strip
+      # Check if this method is already in our list
+      next if webhook_routes.any? { |r| r[2] == method_name && r[1] == controller_name }
+      webhook_routes << {route_path, controller_name, method_name}
+    end
+    
+    # Fallback: look for methods in webhook controllers (find all def methods)
+    content.scan(/def (\w+)/) do |match|
+      method_name = match[1]
+      # Skip standard methods and private/internal methods
+      next if ["initialize", "index", "show", "create", "update", "destroy", "context", "params", "json_body", "current_user", "user_signed_in?", "current_user_id"].includes?(method_name)
+      
+      # Check if this method is already in our list
+      next if webhook_routes.any? { |r| r[2] == method_name && r[1] == controller_name }
+      
+      # Create route path
+      route_path = "/webhooks/#{base_name}/#{method_name}"
+      webhook_routes << {route_path, controller_name, method_name}
+    end
+  end
+  
+  if webhook_routes.empty?
+    puts "\e[33m⚠ No webhook methods found in controllers.\e[0m"
+    puts "\e[36m\n▶ Use Webhook() helper in your webhook controllers, then run this command again.\e[0m\n"
+    exit 0
+  end
+  
+  # Read existing routes
+  routes_content = File.read(routes_path)
+  routes_lines = routes_content.lines
+  
+  # Remove existing webhook routes (lines containing /webhooks/)
+  routes_lines = routes_lines.reject { |line| line.includes?("/webhooks/") && !line.strip.starts_with?("#") }
+  
+  # Find the last "end"
+  end_index = routes_lines.rindex { |l| l.strip == "end" }
+  
+  if end_index
+    # Add webhook routes before the last "end"
+    webhook_routes.each do |route_path, controller_name, action|
+      route_line = "  r.post \"#{route_path}\", to: \"#{controller_name}##{action}\""
+      routes_lines.insert(end_index, route_line)
+    end
+    File.write(routes_path, routes_lines.join("\n") + "\n")
+  else
+    # No end found, append
+    File.open(routes_path, "a") do |f|
+      webhook_routes.each do |route_path, controller_name, action|
+        f.puts "  r.post \"#{route_path}\", to: \"#{controller_name}##{action}\""
+      end
+    end
+  end
+  
+  puts "\e[32m✓\e[0m Added #{webhook_routes.size} webhook route(s):"
+  webhook_routes.each do |route_path, controller_name, action|
+    puts "  \e[36mPOST #{route_path}\e[0m -> \e[33m#{controller_name}##{action}\e[0m"
+  end
+  puts "\e[36m\n▶ Routes updated in config/routes.cr\e[0m\n"
+  exit 0
+end
+
+# ===============================================
 # kothari diagram
 # ===============================================
 if ARGV[0]? == "diagram"
@@ -2370,7 +2711,11 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts ""
   puts "  \e[36mkothari g migration\e[0m \e[90m<name> [field:type ...]\e[0m"
   puts "     Generate a new database migration"
-  puts "     Use 'reference' type to create foreign keys with indexes"
+  puts "     Examples:"
+  puts "       create_users email:string"
+  puts "       add_name_to_users name:string:uniq"
+  puts "       remove_email_from_users email:string"
+  puts "     Use 'reference' type for foreign keys, ':uniq' for unique constraints"
   puts ""
   puts "  \e[36mkothari g scaffold\e[0m \e[90m<name> [field:type ...]\e[0m"
   puts "     Generate model, controller, migration, and routes"
@@ -2407,7 +2752,7 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts ""
   puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
   puts "\e[32m║  For more information: https://github.com/kothari-api   ║\e[0m"
-  puts "\e[32m║  Version: \e[36m1.5.0\e[32m                                          ║\e[0m"
+  puts "\e[32m║  Version: \e[36m2.0.0\e[32m                                          ║\e[0m"
   puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
   puts ""
   exit 0
