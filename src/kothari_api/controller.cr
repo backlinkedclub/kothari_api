@@ -7,11 +7,113 @@ module KothariAPI
 
     @params : Hash(String, String)
     @json_body : Hash(String, JSON::Any) | Nil
+    @current_user : Nil = nil
 
     def initialize(@context)
       # Pre-initialize params so the instance variable is never nil.
       @params = {} of String => String
       @json_body = nil
+    end
+
+    # -------- Callbacks (Rails-style before_action/after_action) --------
+    
+    # Class-level storage for callbacks (per class, not shared)
+    class_getter before_action_callbacks : Array({Symbol, Array(Symbol)?, Array(Symbol)?}) = [] of {Symbol, Array(Symbol)?, Array(Symbol)?}
+    class_getter after_action_callbacks : Array({Symbol, Array(Symbol)?, Array(Symbol)?}) = [] of {Symbol, Array(Symbol)?, Array(Symbol)?}
+
+    # Register a before_action callback
+    # Usage:
+    #   before_action :authenticate_user!
+    #   before_action :set_post, only: [:show, :update, :destroy]
+    #   before_action :check_permission, except: [:index, :show]
+    def self.before_action(method_name : Symbol, only : Array(Symbol)? = nil, except : Array(Symbol)? = nil)
+      before_action_callbacks << {method_name, only, except}
+    end
+
+    # Register an after_action callback
+    # Usage:
+    #   after_action :log_action
+    #   after_action :set_cache_headers, only: [:index, :show]
+    def self.after_action(method_name : Symbol, only : Array(Symbol)? = nil, except : Array(Symbol)? = nil)
+      after_action_callbacks << {method_name, only, except}
+    end
+
+    # Check if a callback should run for a given action
+    private def should_run_callback?(action : String, only : Array(Symbol)?, except : Array(Symbol)?) : Bool
+      action_sym = action.to_sym
+      
+      if only
+        return only.includes?(action_sym)
+      end
+      
+      if except
+        return !except.includes?(action_sym)
+      end
+      
+      true
+    end
+
+    # Run before_action callbacks
+    private def run_before_actions(action : String)
+      self.class.before_action_callbacks.each do |callback|
+        method_name, only, except = callback
+        if should_run_callback?(action, only, except)
+          # Call the method - this will be resolved at runtime
+          begin
+            result = case method_name
+            when :authenticate_user!
+              authenticate_user!
+            else
+              # Try to call the method by name
+              # Note: This requires the method to be defined in the controller subclass
+              call_callback_method(method_name)
+            end
+            
+            # If callback returns false or response is closed, stop processing
+            return false if result == false || context.response.closed?
+          rescue ex
+            # Method doesn't exist or error occurred
+            STDERR.puts "Callback error: #{ex.message}" if ENV["DEBUG"]?
+            next
+          end
+        end
+      end
+      true
+    end
+
+    # Run after_action callbacks
+    private def run_after_actions(action : String)
+      self.class.after_action_callbacks.each do |callback|
+        method_name, only, except = callback
+        if should_run_callback?(action, only, except)
+          begin
+            # Call the method
+            case method_name
+            else
+              call_callback_method(method_name)
+            end
+          rescue ex
+            # Method doesn't exist or error occurred
+            STDERR.puts "Callback error: #{ex.message}" if ENV["DEBUG"]?
+            next
+          end
+        end
+      end
+    end
+
+    # Helper to call callback methods dynamically
+    # This uses method_missing-style lookup - methods must be defined in subclasses
+    private def call_callback_method(method_name : Symbol)
+      # Try common callback method names
+      case method_name.to_s
+      when "authenticate_user!"
+        authenticate_user!
+      when "set_post", "set_user", "set_resource"
+        # These are common patterns - subclasses should define them
+        raise "Callback method #{method_name} not implemented. Define it as a private method in your controller."
+      else
+        raise "Callback method #{method_name} not found. Make sure it's defined as a private method in your controller."
+      end
     end
 
     # JSON response helper – use this in actions to respond with JSON.
@@ -95,9 +197,15 @@ module KothariAPI
 
     # Explicit dispatcher for common REST-style actions.
     # Also handles custom actions like "signup", "login", etc.
+    # Runs before_action and after_action callbacks automatically.
     def send(action : String)
+      # Run before_action callbacks
+      unless run_before_actions(action)
+        return  # Callback stopped the request (e.g., unauthorized)
+      end
+
       # Handle standard REST actions
-      case action
+      result = case action
       when "index"   then index
       when "show"    then show
       when "create"  then create
@@ -108,6 +216,11 @@ module KothariAPI
       else
         raise "Unknown action #{action} for #{self.class}"
       end
+
+      # Run after_action callbacks
+      run_after_actions(action)
+      
+      result
     end
 
     # Default REST actions – controllers are expected to override
@@ -257,6 +370,89 @@ module KothariAPI
         end
       end
       allowed
+    end
+
+    # -------- Authentication Helpers --------
+
+    # Get the current authenticated user (cached per request)
+    # Override this method in your controllers to customize user lookup
+    # This default implementation looks for a User model and finds by user_id or email from JWT
+    def current_user
+      return @current_user if @current_user
+      
+      auth_header = context.request.headers["Authorization"]?
+      return nil unless auth_header
+      
+      # Extract token from "Bearer <token>"
+      token = auth_header.lchop("Bearer ").strip
+      return nil if token.empty?
+      
+      begin
+        payload = KothariAPI::Auth::JWTAuth.decode(token)
+        user_id = payload["user_id"]?.try &.as_i?
+        email = payload["email"]?.try &.as_s
+        
+        # Default implementation - subclasses should override for custom logic
+        # This will work if you have a User model with find and find_by methods
+        user = nil
+        
+        # Try to find by user_id first (if JWT contains user_id)
+        if user_id
+          user = find_user_by_id(user_id)
+        end
+        
+        # Fallback to email lookup (most common with kothari g auth)
+        if !user && email
+          user = find_user_by_email(email)
+        end
+        
+        @current_user = user
+        user
+      rescue KothariAPI::Auth::JWTError
+        nil  # Invalid or expired token
+      end
+    end
+
+    # Helper to find user by ID
+    # Override this in your controller if you have a User model:
+    #   private def find_user_by_id(user_id)
+    #     User.find(user_id)
+    #   end
+    private def find_user_by_id(user_id)
+      # Default: return nil - subclasses should override
+      nil
+    end
+
+    # Helper to find user by email
+    # Override this in your controller if you have a User model:
+    #   private def find_user_by_email(email)
+    #     User.find_by("email", email)
+    #   end
+    private def find_user_by_email(email : String)
+      # Default: return nil - subclasses should override
+      nil
+    end
+
+    # Authenticate user - use in before_action
+    # Stops the request and returns 401 Unauthorized if no user is found
+    def authenticate_user!
+      user = current_user
+      unless user
+        unauthorized("Authentication required")
+        return false
+      end
+      true
+    end
+
+    # Check if user is authenticated
+    def user_signed_in?
+      !current_user.nil?
+    end
+
+    # Get current user ID (convenience method)
+    def current_user_id
+      user = current_user
+      user.try &.id
     end
   end
 end

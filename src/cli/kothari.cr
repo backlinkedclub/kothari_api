@@ -1160,9 +1160,13 @@ class AuthController < KothariAPI::Controller
       password_digest: digest
     )
 
-    token = KothariAPI::Auth::JWTAuth.issue_simple({"email" => email.not_nil!})
+    # Include user_id in JWT for easier lookup
+    token = KothariAPI::Auth::JWTAuth.issue_simple({
+      "email" => email.not_nil!,
+      "user_id" => user.id.not_nil!
+    })
     context.response.status = HTTP::Status::CREATED
-    json({token: token, email: email.not_nil!})
+    json({token: token, email: email.not_nil!, user_id: user.id})
   end
 
   # POST /login
@@ -1183,8 +1187,13 @@ class AuthController < KothariAPI::Controller
       return json({error: "Invalid email or password"})
     end
 
-    token = KothariAPI::Auth::JWTAuth.issue_simple({"email" => email.not_nil!})
-    json({token: token, email: email.not_nil!})
+    # Include user_id in JWT for easier lookup
+    token = KothariAPI::Auth::JWTAuth.issue_simple({
+      "email" => email.not_nil!,
+      "user_id" => user.id.not_nil!
+    })
+    context.response.status = HTTP::Status::OK
+    json({token: token, email: email.not_nil!, user_id: user.id})
   end
 end
 

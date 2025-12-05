@@ -361,6 +361,638 @@ end
 
 Controllers inherit from `KothariAPI::Controller` and provide a rich set of JSON helpers for different HTTP methods.
 
+### Before Action & After Action Callbacks (Rails-style)
+
+KothariAPI supports Rails-style `before_action` and `after_action` callbacks to run code before or after controller actions. This is perfect for authentication, setting up resources, logging, and more.
+
+#### Basic Usage
+
+```crystal
+class PostsController < KothariAPI::Controller
+  # Require authentication for all actions
+  before_action :authenticate_user!
+
+  # Or only for specific actions
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+  
+  # Or exclude specific actions
+  before_action :authenticate_user!, except: [:index, :show]
+
+  # Set up a resource before certain actions
+  before_action :set_post, only: [:show, :update, :destroy]
+
+  # Run code after actions
+  after_action :log_action, only: [:create, :update, :destroy]
+
+  def index
+    json_get(Post.all)
+  end
+
+  def show
+    # @post is set by set_post before_action
+    json_get(@post)
+  end
+
+  def create
+    attrs = permit_body("title", "content")
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user_id  # Available because of authenticate_user!
+    )
+    json_post(post)
+  end
+
+  def update
+    # @post is set by set_post before_action
+    attrs = permit_body("title", "content")
+    if Post.update(@post.id, attrs)
+      json_update(Post.find(@post.id))
+    else
+      unprocessable_entity("Failed to update post")
+    end
+  end
+
+  def destroy
+    # @post is set by set_post before_action
+    if Post.delete(@post.id)
+      json_delete({message: "Post deleted successfully"})
+    else
+      internal_server_error("Failed to delete post")
+    end
+  end
+
+  private
+
+  # This method is called by before_action :authenticate_user!
+  def authenticate_user!
+    user = current_user
+    unless user
+      unauthorized("Authentication required")
+      return false  # Stops the action from running
+    end
+    true
+  end
+
+  # This method is called by before_action :set_post
+  def set_post
+    id = params["id"]?.try &.to_i?
+    @post = Post.find(id) if id
+    unless @post
+      not_found("Post not found")
+      return false  # Stops the action from running
+    end
+    true
+  end
+
+  # This method is called by after_action :log_action
+  def log_action
+    # Log the action (e.g., to database or logging service)
+    puts "Action performed: #{context.request.method} #{context.request.path}"
+  end
+end
+```
+
+#### Authentication Example
+
+After running `kothari g auth`, you can protect your controllers like this:
+
+```crystal
+class PostsController < KothariAPI::Controller
+  # Require authentication for create, update, destroy
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+
+  def index
+    # Public - anyone can view posts
+    json_get(Post.all)
+  end
+
+  def show
+    # Public - anyone can view a post
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    if post
+      json_get(post)
+    else
+      not_found("Post not found")
+    end
+  end
+
+  def create
+    # Protected - requires authentication
+    # current_user is available because of authenticate_user!
+    attrs = permit_body("title", "content")
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user_id  # Uses the authenticated user's ID
+    )
+    json_post(post)
+  end
+
+  def update
+    # Protected - requires authentication
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    # Optional: Check if user owns the post
+    unless post.user_id == current_user_id
+      return forbidden("You can only update your own posts")
+    end
+    
+    attrs = permit_body("title", "content")
+    if Post.update(id, attrs)
+      json_update(Post.find(id))
+    else
+      unprocessable_entity("Failed to update post")
+    end
+  end
+
+  def destroy
+    # Protected - requires authentication
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    # Optional: Check if user owns the post
+    unless post.user_id == current_user_id
+      return forbidden("You can only delete your own posts")
+    end
+    
+    if Post.delete(id)
+      json_delete({message: "Post deleted successfully"})
+    else
+      internal_server_error("Failed to delete post")
+    end
+  end
+
+  private
+
+  # Built-in method - no need to define if using default behavior
+  # Override if you need custom user lookup logic
+  def authenticate_user!
+    user = current_user
+    unless user
+      unauthorized("Authentication required")
+      return false
+    end
+    true
+  end
+end
+```
+
+#### Setting Up Resources
+
+Use `before_action` to set up resources that multiple actions need:
+
+```crystal
+class PostsController < KothariAPI::Controller
+  before_action :set_post, only: [:show, :update, :destroy]
+  before_action :authenticate_user!, only: [:update, :destroy]
+
+  def show
+    # @post is already set by set_post
+    json_get(@post)
+  end
+
+  def update
+    # @post is already set, and user is authenticated
+    attrs = permit_body("title", "content")
+    if Post.update(@post.id, attrs)
+      json_update(Post.find(@post.id))
+    else
+      unprocessable_entity("Failed to update post")
+    end
+  end
+
+  private
+
+  def set_post
+    id = params["id"]?.try &.to_i?
+    @post = Post.find(id) if id
+    unless @post
+      not_found("Post not found")
+      return false
+    end
+    true
+  end
+end
+```
+
+#### Callback Options
+
+**`only:`** - Run callback only for these actions
+```crystal
+before_action :authenticate_user!, only: [:create, :update, :destroy]
+```
+
+**`except:`** - Run callback for all actions except these
+```crystal
+before_action :authenticate_user!, except: [:index, :show]
+```
+
+**No options** - Run callback for all actions
+```crystal
+before_action :authenticate_user!
+```
+
+#### Built-in Authentication Helpers
+
+KothariAPI provides these authentication helpers:
+
+- `current_user` - Returns the authenticated user (from JWT token)
+- `current_user_id` - Returns the authenticated user's ID (convenience method)
+- `user_signed_in?` - Returns true if user is authenticated
+- `authenticate_user!` - Stops the request if user is not authenticated (returns 401)
+
+**Note:** `current_user_id` is a helper that returns `current_user.try &.id`. You can also use `current_user.id` directly, but `current_user_id` is safer as it handles nil cases.
+
+#### Complete cURL Example: Creating a Post with JWT Authentication
+
+Here's a complete example showing how to authenticate and create a post:
+
+**Step 1: Sign up (or login) to get a JWT token**
+
+```bash
+# Sign up a new user
+curl -X POST http://localhost:3000/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "email": "user@example.com",
+  "user_id": 1
+}
+```
+
+**Step 2: Use the token to create a post**
+
+```bash
+# Create a post with JWT authentication
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -d '{
+    "title": "My First Post",
+    "content": "This is the content of my post"
+  }'
+```
+
+**Or login if you already have an account:**
+
+```bash
+# Login to get a token
+curl -X POST http://localhost:3000/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "email": "user@example.com",
+  "user_id": 1
+}
+```
+
+**Step 3: Use the token in subsequent requests**
+
+```bash
+# Save the token to a variable (bash)
+TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+
+# Create a post
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "title": "My First Post",
+    "content": "This is the content of my post"
+  }'
+
+# Update a post
+curl -X PATCH http://localhost:3000/posts/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "title": "Updated Title",
+    "content": "Updated content"
+  }'
+
+# Delete a post
+curl -X DELETE http://localhost:3000/posts/1 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get all posts (public - no auth needed)
+curl -X GET http://localhost:3000/posts
+
+# Get a specific post (public - no auth needed)
+curl -X GET http://localhost:3000/posts/1
+```
+
+#### How current_user.id Works
+
+Yes, `current_user.id` works! Here's how it works in your controller:
+
+```crystal
+class PostsController < KothariAPI::Controller
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+
+  def create
+    attrs = permit_body("title", "content")
+    
+    # Option 1: Use current_user_id (recommended - handles nil safely)
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user_id  # Returns current_user.id or nil
+    )
+    
+    # Option 2: Use current_user.id directly (if you're sure user exists)
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user.not_nil!.id  # Direct access (use .not_nil! if sure)
+    )
+    
+    # Option 3: Use current_user with safe navigation
+    user = current_user
+    if user
+      post = Post.create(
+        title: attrs["title"].to_s,
+        content: attrs["content"].to_s,
+        user_id: user.id  # Safe - we checked user exists
+      )
+    end
+    
+    json_post(post)
+  end
+end
+```
+
+**Recommended approach:** Use `current_user_id` because:
+- It safely handles nil cases
+- It's shorter and cleaner
+- It works perfectly with `before_action :authenticate_user!` (which ensures user exists)
+
+#### Complete Working Example
+
+Here's a complete PostsController that works with JWT authentication:
+
+```crystal
+class PostsController < KothariAPI::Controller
+  # Require authentication for create, update, destroy
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+  
+  # Make current_user work with User model
+  private def find_user_by_id(user_id)
+    User.find(user_id)
+  end
+
+  private def find_user_by_email(email : String)
+    User.find_by("email", email)
+  end
+
+  def index
+    # Public - no auth needed
+    json_get(Post.all)
+  end
+
+  def show
+    # Public - no auth needed
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    if post
+      json_get(post)
+    else
+      not_found("Post not found")
+    end
+  end
+
+  def create
+    # Protected - requires JWT token
+    # current_user and current_user_id are available here
+    attrs = permit_body("title", "content")
+    
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user_id  # Automatically uses authenticated user's ID
+    )
+    
+    json_post(post)
+  end
+
+  def update
+    # Protected - requires JWT token
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    # Optional: Check ownership
+    unless post.user_id == current_user_id
+      return forbidden("You can only update your own posts")
+    end
+    
+    attrs = permit_body("title", "content")
+    if Post.update(id, attrs)
+      json_update(Post.find(id))
+    else
+      unprocessable_entity("Failed to update post")
+    end
+  end
+
+  def destroy
+    # Protected - requires JWT token
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    # Optional: Check ownership
+    unless post.user_id == current_user_id
+      return forbidden("You can only delete your own posts")
+    end
+    
+    if Post.delete(id)
+      json_delete({message: "Post deleted successfully"})
+    else
+      internal_server_error("Failed to delete post")
+    end
+  end
+end
+```
+
+#### Testing with cURL
+
+**1. Sign up:**
+```bash
+curl -X POST http://localhost:3000/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+**2. Copy the token from the response, then create a post:**
+```bash
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -d '{"title":"My Post","content":"Post content"}'
+```
+
+**3. Test without token (should fail with 401):**
+```bash
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My Post","content":"Post content"}'
+```
+
+**Expected error response:**
+```json
+{
+  "error": "Authentication required"
+}
+```
+
+#### Making current_user Work with Your User Model
+
+After running `kothari g auth`, you need to override the helper methods in your controllers to make `current_user` work. Create an `ApplicationController` or add this to your base controller:
+
+```crystal
+# app/controllers/application_controller.cr (optional - create this file)
+class ApplicationController < KothariAPI::Controller
+  # Override these methods to make current_user work with your User model
+  private def find_user_by_id(user_id)
+    User.find(user_id)
+  end
+
+  private def find_user_by_email(email : String)
+    User.find_by("email", email)
+  end
+end
+
+# Then inherit from ApplicationController in your other controllers:
+class PostsController < ApplicationController
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+  # ... rest of your controller
+end
+```
+
+Or, add the methods directly to each controller that needs authentication:
+
+```crystal
+class PostsController < KothariAPI::Controller
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+
+  # ... your actions ...
+
+  private
+
+  # Make current_user work with User model
+  def find_user_by_id(user_id)
+    User.find(user_id)
+  end
+
+  def find_user_by_email(email : String)
+    User.find_by("email", email)
+  end
+end
+```
+
+#### How It Works
+
+1. **Before actions run first** - `before_action` callbacks run before the action method
+2. **Return false to stop** - If a `before_action` returns `false`, the action won't run
+3. **After actions run last** - `after_action` callbacks run after the action method completes
+4. **Order matters** - Callbacks run in the order they're defined
+
+#### Complete Example with Authentication
+
+```crystal
+class PostsController < KothariAPI::Controller
+  # Authentication required for modifying posts
+  before_action :authenticate_user!, only: [:create, :update, :destroy]
+  
+  # Set post for show, update, destroy
+  before_action :set_post, only: [:show, :update, :destroy]
+  
+  # Check ownership for update, destroy
+  before_action :check_ownership!, only: [:update, :destroy]
+
+  def index
+    json_get(Post.all)
+  end
+
+  def show
+    json_get(@post)
+  end
+
+  def create
+    attrs = permit_body("title", "content")
+    post = Post.create(
+      title: attrs["title"].to_s,
+      content: attrs["content"].to_s,
+      user_id: current_user_id
+    )
+    json_post(post)
+  end
+
+  def update
+    attrs = permit_body("title", "content")
+    if Post.update(@post.id, attrs)
+      json_update(Post.find(@post.id))
+    else
+      unprocessable_entity("Failed to update post")
+    end
+  end
+
+  def destroy
+    if Post.delete(@post.id)
+      json_delete({message: "Post deleted successfully"})
+    else
+      internal_server_error("Failed to delete post")
+    end
+  end
+
+  private
+
+  def set_post
+    id = params["id"]?.try &.to_i?
+    @post = Post.find(id) if id
+    unless @post
+      not_found("Post not found")
+      return false
+    end
+    true
+  end
+
+  def check_ownership!
+    unless @post.user_id == current_user_id
+      forbidden("You can only modify your own posts")
+      return false
+    end
+    true
+  end
+end
+```
+
+This example shows:
+- Public `index` and `show` actions (no authentication)
+- Protected `create`, `update`, `destroy` actions (require authentication)
+- Resource setup with `set_post`
+- Ownership checking with `check_ownership!`
+
 ### JSON Response Helpers
 
 KothariAPI provides convenient JSON helpers for each HTTP method:
