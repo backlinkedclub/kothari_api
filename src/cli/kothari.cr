@@ -2407,7 +2407,7 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts ""
   puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
   puts "\e[32m║  For more information: https://github.com/kothari-api   ║\e[0m"
-  puts "\e[32m║  Version: \e[36m1.0.0\e[32m                                          ║\e[0m"
+  puts "\e[32m║  Version: \e[36m1.5.0\e[32m                                          ║\e[0m"
   puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
   puts ""
   exit 0
