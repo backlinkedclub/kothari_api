@@ -254,6 +254,37 @@ POST      /login                 auth#login
 Total: 5 route(s)
 ```
 
+#### `kothari document`
+
+Automatically generates and updates API documentation in the README.md file. This command parses all routes, extracts parameters from controllers, and generates comprehensive API documentation with request/response examples.
+
+```bash
+kothari document
+```
+
+**Features:**
+- Lists all endpoints with HTTP methods and paths
+- Extracts required parameters from controller actions
+- Generates example request and response structures
+- Updates README.md with auto-generated documentation section
+- Prints documentation summary to terminal
+
+**Output:**
+```
+╔═══════════════════════════════════════════════════════════╗
+║                  API DOCUMENTATION                       ║
+╚═══════════════════════════════════════════════════════════╝
+
+Posts Endpoints:
+  GET     /posts                          posts#index
+  POST    /posts                          posts#create
+
+Total: 2 endpoint(s) documented
+✓ Documentation updated in README.md
+```
+
+The documentation section in README.md will be automatically updated with detailed endpoint information, parameters, and examples.
+
 #### `kothari console`
 
 Opens an interactive console for exploring your models and running SQL queries.
@@ -261,6 +292,8 @@ Opens an interactive console for exploring your models and running SQL queries.
 ```bash
 kothari console
 ```
+
+**Note:** The console automatically installs shards if needed. Make sure you're in your KothariAPI app directory.
 
 **Console Commands:**
 ```ruby
@@ -326,30 +359,357 @@ end
 
 ## Controllers
 
-Controllers inherit from `KothariAPI::Controller`:
+Controllers inherit from `KothariAPI::Controller` and provide a rich set of JSON helpers for different HTTP methods.
+
+### JSON Response Helpers
+
+KothariAPI provides convenient JSON helpers for each HTTP method:
+
+#### `json_get(data)` - GET Requests
+Returns 200 OK with JSON data. Use for listing and showing resources.
+
+```crystal
+def index
+  json_get(Post.all)  # Returns 200 OK
+end
+
+def show
+  post = Post.find(params["id"]?.try &.to_i?)
+  if post
+    json_get(post)  # Returns 200 OK
+  else
+    not_found("Post not found")
+  end
+end
+```
+
+#### `json_post(data)` - POST Requests
+Returns 201 Created with JSON data. Use for creating new resources.
+
+```crystal
+def create
+  attrs = permit_body("title", "content")
+  post = Post.create(
+    title: attrs["title"].to_s,
+    content: attrs["content"].to_s
+  )
+  json_post(post)  # Returns 201 Created
+end
+```
+
+#### `json_update(data)` - PUT/PATCH Requests
+Returns 200 OK with JSON data. Use for updating existing resources.
+
+```crystal
+def update
+  id = params["id"]?.try &.to_i?
+  post = Post.find(id)
+  return not_found("Post not found") unless post
+  
+  attrs = permit_body("title", "content")
+  if Post.update(id, attrs)
+    json_update(Post.find(id))  # Returns 200 OK
+  else
+    unprocessable_entity("Failed to update post")
+  end
+end
+```
+
+#### `json_patch(data)` - PATCH Requests
+Alias for `json_update`. Returns 200 OK with JSON data.
+
+```crystal
+def update
+  # ... same as above
+  json_patch(Post.find(id))  # Returns 200 OK
+end
+```
+
+#### `json_delete(data)` - DELETE Requests
+Returns 200 OK with JSON data, or 204 No Content if no data provided.
+
+```crystal
+def destroy
+  id = params["id"]?.try &.to_i?
+  if Post.delete(id)
+    json_delete({message: "Post deleted successfully"})  # Returns 200 OK
+    # Or simply:
+    # json_delete  # Returns 204 No Content
+  else
+    not_found("Post not found")
+  end
+end
+```
+
+#### `json(data)` - Generic JSON Response
+Generic helper that sets content-type but doesn't set status code. Use when you need custom status codes.
+
+```crystal
+def custom_action
+  context.response.status = HTTP::Status::ACCEPTED
+  json({message: "Request accepted"})
+end
+```
+
+### Complete Controller Example
 
 ```crystal
 class PostsController < KothariAPI::Controller
+  # GET /posts
   def index
-    json(Post.all)
+    json_get(Post.all)
   end
 
+  # GET /posts/:id
+  def show
+    id = params["id"]?.try &.to_i?
+    post = Post.find(id)
+    if post
+      json_get(post)
+    else
+      not_found("Post not found")
+    end
+  end
+
+  # POST /posts
   def create
-    attrs = post_params
-    post = Post.create(
-      title: attrs["title"].to_s,
-      content: attrs["content"].to_s
-    )
-    context.response.status = HTTP::Status::CREATED
-    json(post)
+    attrs = permit_body("title", "content", "published")
+    begin
+      post = Post.create(
+        title: attrs["title"].to_s,
+        content: attrs["content"].to_s,
+        published: attrs["published"]?.as_bool? || false
+      )
+      json_post(post)
+    rescue ex
+      unprocessable_entity("Failed to create post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
+  end
+
+  # PATCH /posts/:id
+  def update
+    id = params["id"]?.try &.to_i?
+    return bad_request("ID required") unless id
+    
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    attrs = permit_body("title", "content", "published")
+    begin
+      if Post.update(id, attrs)
+        json_update(Post.find(id))
+      else
+        unprocessable_entity("Failed to update post")
+      end
+    rescue ex
+      unprocessable_entity("Failed to update post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
+  end
+
+  # DELETE /posts/:id
+  def destroy
+    id = params["id"]?.try &.to_i?
+    return bad_request("ID required") unless id
+    
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    begin
+      if Post.delete(id)
+        json_delete({message: "Post deleted successfully"})
+      else
+        internal_server_error("Failed to delete post")
+      end
+    rescue ex
+      internal_server_error("Failed to delete post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
   end
 
   private def post_params
-    JSON.parse(context.request.body.not_nil!.gets_to_end).as_h
+    permit_body("title", "content", "published")
   end
 end
 
 KothariAPI::ControllerRegistry.register("posts", PostsController)
+```
+
+### Error Response Helpers
+
+KothariAPI provides standardized error response helpers:
+
+```crystal
+bad_request("Invalid input")                    # 400 Bad Request
+unauthorized("Authentication required")         # 401 Unauthorized
+forbidden("Access denied")                      # 403 Forbidden
+not_found("Resource not found")                 # 404 Not Found
+unprocessable_entity("Validation failed")       # 422 Unprocessable Entity
+internal_server_error("Server error")           # 500 Internal Server Error
+```
+
+All error helpers accept an optional `details` hash for additional information:
+
+```crystal
+bad_request("Validation failed", {
+  "field" => JSON::Any.new("email"),
+  "message" => JSON::Any.new("Invalid email format")
+})
+```
+
+## JSON Helpers Reference
+
+KothariAPI provides convenient JSON response helpers for all HTTP methods. These helpers automatically set the correct status codes and content types.
+
+### GET Requests - `json_get(data)`
+
+Returns **200 OK** with JSON data. Perfect for `index` and `show` actions.
+
+```crystal
+def index
+  json_get(Post.all)  # 200 OK
+end
+
+def show
+  post = Post.find(params["id"]?.try &.to_i?)
+  if post
+    json_get(post)  # 200 OK
+  else
+    not_found("Post not found")
+  end
+end
+```
+
+### POST Requests - `json_post(data)`
+
+Returns **201 Created** with JSON data. Use for creating new resources.
+
+```crystal
+def create
+  attrs = permit_body("title", "content")
+  post = Post.create(
+    title: attrs["title"].to_s,
+    content: attrs["content"].to_s
+  )
+  json_post(post)  # 201 Created
+end
+```
+
+### UPDATE/PATCH Requests - `json_update(data)` / `json_patch(data)`
+
+Returns **200 OK** with JSON data. Use for updating existing resources.
+
+```crystal
+def update
+  id = params["id"]?.try &.to_i?
+  post = Post.find(id)
+  return not_found("Post not found") unless post
+  
+  attrs = permit_body("title", "content")
+  if Post.update(id, attrs)
+    json_update(Post.find(id))  # 200 OK
+    # Or use json_patch for PATCH requests
+    # json_patch(Post.find(id))
+  else
+    unprocessable_entity("Failed to update post")
+  end
+end
+```
+
+### DELETE Requests - `json_delete(data)`
+
+Returns **200 OK** with JSON data, or **204 No Content** if no data provided.
+
+```crystal
+def destroy
+  id = params["id"]?.try &.to_i?
+  if Post.delete(id)
+    json_delete({message: "Post deleted successfully"})  # 200 OK
+    # Or for 204 No Content:
+    # json_delete
+  else
+    not_found("Post not found")
+  end
+end
+```
+
+### Generic JSON Response - `json(data)`
+
+Generic helper that sets content-type but doesn't set status code. Use when you need custom status codes.
+
+```crystal
+def custom_action
+  context.response.status = HTTP::Status::ACCEPTED
+  json({message: "Request accepted"})
+end
+```
+
+### Request Parameters
+
+#### Query Parameters
+
+Access query string parameters using `params`:
+
+```crystal
+def index
+  page = params["page"]?.try &.to_i? || 1
+  limit = params["limit"]?.try &.to_i? || 10
+  # Use page and limit for pagination
+end
+```
+
+#### Path Parameters
+
+Path parameters from routes like `/posts/:id` are automatically available in `params`:
+
+```crystal
+# Route: GET /posts/:id
+def show
+  id = params["id"]?.try &.to_i?  # Automatically extracted from path
+  post = Post.find(id)
+  # ...
+end
+```
+
+#### JSON Body Parameters
+
+Access JSON request body using `json_body` or use strong params with `permit_body`:
+
+```crystal
+def create
+  # Get all JSON body data
+  data = json_body
+  
+  # Or use strong params (recommended)
+  attrs = permit_body("title", "content", "published")
+  # Only "title", "content", and "published" are allowed
+end
+```
+
+#### Strong Parameters
+
+Use `permit_body` for JSON body parameters and `permit_params` for query parameters:
+
+```crystal
+# Only allow specific fields from JSON body
+def create
+  attrs = permit_body("title", "content", "published")
+  post = Post.create(
+    title: attrs["title"].to_s,
+    content: attrs["content"].to_s,
+    published: attrs["published"]?.as_bool? || false
+  )
+end
+
+# Only allow specific query parameters
+def index
+  filters = permit_params("status", "category")
+  # Use filters safely
+end
 ```
 
 ## Models
@@ -377,7 +737,10 @@ end
 - `Post.all` - Get all records
 - `Post.find(id)` - Find by ID
 - `Post.create(**fields)` - Create a new record
+- `Post.update(id, attrs)` - Update a record by ID
+- `Post.delete(id)` - Delete a record by ID
 - `Post.where(condition)` - Query with SQL condition
+- `Post.find_by(column, value)` - Find by a specific column
 
 ## Data Types
 
@@ -421,6 +784,247 @@ POST /login
 }
 ```
 
+## CORS Configuration
+
+CORS (Cross-Origin Resource Sharing) controls which applications/domains can access your API from a browser. This is a critical security feature that prevents unauthorized websites from making requests to your API.
+
+### Configuration File
+
+KothariAPI uses `config/initializers/cors.cr` (similar to Rails' `config/initializers/cors.rb`) to configure CORS settings.
+
+**Location:** `config/initializers/cors.cr`
+
+### Understanding CORS Settings
+
+#### `allowed_origins`
+
+**What it does:** Specifies which domains/URLs are allowed to make requests to your API.
+
+**Options:**
+- **Specific domains:** `["https://example.com", "https://app.example.com"]` - Only these domains can access your API
+- **Wildcard:** `["*"]` - Allows ALL domains (⚠️ **NOT recommended for production** - security risk)
+- **Empty array:** `[]` - Disables CORS completely
+
+**Example:**
+```crystal
+allowed_origins: [
+  "http://localhost:3000",        # Local development
+  "http://localhost:5173",        # Vite dev server
+  "https://myapp.com",            # Production domain
+  "https://app.myapp.com"         # Subdomain
+]
+```
+
+**Why it matters:** Without this, browsers will block requests from your frontend to your API due to the Same-Origin Policy.
+
+---
+
+#### `allowed_methods`
+
+**What it does:** Specifies which HTTP methods (GET, POST, etc.) are allowed.
+
+**Options:**
+- `"GET"` - Fetch/read data
+- `"POST"` - Create new resources
+- `"PUT"` - Update entire resource
+- `"PATCH"` - Partially update resource
+- `"DELETE"` - Delete resources
+- `"OPTIONS"` - Preflight requests (required for CORS)
+
+**Example:**
+```crystal
+allowed_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+```
+
+**Why it matters:** Restricts which HTTP operations clients can perform. Only include methods your API actually uses.
+
+---
+
+#### `allowed_headers`
+
+**What it does:** Specifies which request headers clients are allowed to send.
+
+**Common headers:**
+- `"Content-Type"` - Required for JSON requests (`application/json`)
+- `"Authorization"` - Required for JWT tokens and authentication
+- `"Accept"` - What content types the client accepts
+- `"X-Requested-With"` - Used by some frameworks
+
+**Example:**
+```crystal
+allowed_headers: [
+  "Content-Type",
+  "Authorization",
+  "Accept",
+  "X-Requested-With",
+  "X-Custom-Header"  # Your custom headers
+]
+```
+
+**Why it matters:** Browsers will block requests with headers not in this list. Add any custom headers your API needs.
+
+---
+
+#### `exposed_headers`
+
+**What it does:** Specifies which response headers JavaScript can read in the browser.
+
+**When to use:**
+- If your API returns custom headers that the frontend needs to read
+- Examples: `"X-Total-Count"`, `"X-Page-Number"`, `"X-Rate-Limit-Remaining"`
+
+**Example:**
+```crystal
+exposed_headers: [
+  "X-Total-Count",
+  "X-Page-Number",
+  "X-Rate-Limit-Remaining"
+]
+```
+
+**Why it matters:** By default, browsers only expose a few headers to JavaScript. This lets you expose custom headers.
+
+---
+
+#### `max_age`
+
+**What it does:** How long (in seconds) browsers can cache preflight OPTIONS responses.
+
+**Options:**
+- `3600` - 1 hour (default, good balance)
+- `86400` - 24 hours (reduces preflight requests)
+- `0` - No caching (browser checks every time)
+
+**Example:**
+```crystal
+max_age: 3600  # Cache for 1 hour
+```
+
+**Why it matters:** Preflight requests add latency. Caching reduces the number of preflight requests, improving performance.
+
+---
+
+#### `allow_credentials`
+
+**What it does:** Whether to allow cookies and authentication headers in cross-origin requests.
+
+**Options:**
+- `false` - More secure, doesn't allow credentials (default)
+- `true` - Allows cookies/auth headers (⚠️ requires specific origins, cannot use `"*"`)
+
+**Example:**
+```crystal
+allow_credentials: false  # Default, more secure
+```
+
+**Important:** If `allow_credentials: true`, you **MUST** specify exact origins (cannot use `"*"`).
+
+**Why it matters:** Credentials include cookies and authentication headers. Only enable if you need them.
+
+---
+
+### Complete CORS Configuration Example
+
+```crystal
+# config/initializers/cors.cr
+
+KothariAPI::CORS.configure(
+  # Development: Allow localhost
+  # Production: Only your actual domains
+  allowed_origins: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://myapp.com",
+    "https://app.myapp.com"
+  ],
+
+  # All standard REST methods
+  allowed_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+
+  # Standard headers for JSON API
+  allowed_headers: [
+    "Content-Type",
+    "Authorization",
+    "Accept",
+    "X-Requested-With"
+  ],
+
+  # Expose pagination headers to frontend
+  exposed_headers: [
+    "X-Total-Count",
+    "X-Page-Number"
+  ],
+
+  # Cache preflight for 1 hour
+  max_age: 3600,
+
+  # Don't allow credentials (more secure)
+  allow_credentials: false
+)
+```
+
+### Development vs Production
+
+**Development:**
+```crystal
+allowed_origins: [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:3000"
+]
+```
+
+**Production:**
+```crystal
+allowed_origins: [
+  "https://yourdomain.com",
+  "https://app.yourdomain.com"
+]
+# NEVER use "*" in production!
+```
+
+### Testing CORS
+
+**Test from browser console:**
+```javascript
+fetch('http://localhost:3000/api/posts', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_TOKEN'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error('CORS Error:', error));
+```
+
+**Common CORS Errors:**
+- `Access-Control-Allow-Origin` missing → Add origin to `allowed_origins`
+- `Access-Control-Allow-Methods` missing → Add method to `allowed_methods`
+- `Access-Control-Allow-Headers` missing → Add header to `allowed_headers`
+- Credentials error → Set `allow_credentials: true` and use specific origins
+
+### Security Best Practices
+
+1. ✅ **Never use `"*"` in production** - Always specify exact domains
+2. ✅ **Use HTTPS in production** - Always use `https://` for production origins
+3. ✅ **Minimize allowed methods** - Only include methods you actually use
+4. ✅ **Minimize allowed headers** - Only include headers you need
+5. ✅ **Use specific origins** - Don't allow wildcards in production
+6. ✅ **Review regularly** - Remove unused origins and headers
+
+### Disabling CORS
+
+To disable CORS completely:
+```crystal
+KothariAPI::CORS.configure(
+  allowed_origins: []  # Empty array disables CORS
+)
+```
+
+Or simply don't require the CORS config file in `server.cr`.
+
 ## ASCII Art Banners
 
 Every command displays a beautiful ASCII art banner with the command name:
@@ -430,6 +1034,380 @@ kothari new myapp      # Shows "NEW" banner
 kothari db:migrate     # Shows "MIGRATE" banner
 kothari routes         # Shows "ROUTES" banner
 kothari help           # Shows "HELP" banner
+```
+
+## Fetching External APIs
+
+KothariAPI makes it easy to fetch data from external APIs and return it using JSON helpers. Crystal's built-in `HTTP::Client` is perfect for this.
+
+### Quick Reference Pattern
+
+```crystal
+require "http/client"
+require "json"
+
+class ApiController < KothariAPI::Controller
+  def index
+    begin
+      # 1. Make HTTP request
+      response = HTTP::Client.get("https://api.example.com/data")
+      
+      # 2. Check status code
+      return internal_server_error("API error") unless response.status_code == 200
+      
+      # 3. Parse JSON
+      data = JSON.parse(response.body)
+      
+      # 4. Return using JSON helper
+      json_get(data)  # For GET requests
+      # json_post(data)   # For POST requests (201 Created)
+      # json_update(data) # For PUT/PATCH requests (200 OK)
+      # json_delete(data) # For DELETE requests (200 OK or 204 No Content)
+    rescue ex
+      internal_server_error("Error: #{ex.message}")
+    end
+  end
+end
+```
+
+### Basic Example: Fetching and Returning API Data
+
+```crystal
+require "http/client"
+require "json"
+
+class WeatherController < KothariAPI::Controller
+  # GET /weather/:city
+  # Fetches weather data from an external API and returns it
+  def show
+    city = params["city"]?.to_s
+    return bad_request("City parameter required") unless city
+    
+    begin
+      # Fetch data from external API
+      response = HTTP::Client.get("https://api.weather.example.com/weather?city=#{city}")
+      
+      unless response.status_code == 200
+        return internal_server_error("Failed to fetch weather data")
+      end
+      
+      # Parse JSON response
+      weather_data = JSON.parse(response.body)
+      
+      # Return using json_get helper (200 OK)
+      json_get(weather_data)
+    rescue ex : HTTP::Client::Error
+      internal_server_error("Network error: #{ex.message}")
+    rescue ex : JSON::ParseException
+      internal_server_error("Invalid JSON response from API")
+    rescue ex
+      internal_server_error("Unexpected error: #{ex.message}")
+    end
+  end
+end
+
+KothariAPI::ControllerRegistry.register("weather", WeatherController)
+```
+
+### Advanced Example: POST to External API
+
+```crystal
+require "http/client"
+require "json"
+
+class PaymentController < KothariAPI::Controller
+  # POST /payments
+  # Creates a payment by calling an external payment API
+  def create
+    attrs = permit_body("amount", "currency", "description")
+    
+    # Validate required fields
+    unless attrs["amount"]? && attrs["currency"]?
+      return unprocessable_entity("Amount and currency are required")
+    end
+    
+    begin
+      # Prepare request to external API
+      payment_data = {
+        "amount" => attrs["amount"].as_f? || attrs["amount"].to_s.to_f,
+        "currency" => attrs["currency"].to_s,
+        "description" => attrs["description"]?.to_s || ""
+      }
+      
+      # Make POST request to external payment API
+      response = HTTP::Client.post(
+        "https://api.payment.example.com/charges",
+        headers: HTTP::Headers{
+          "Content-Type" => "application/json",
+          "Authorization" => "Bearer #{ENV["PAYMENT_API_KEY"]? || ""}"
+        },
+        body: payment_data.to_json
+      )
+      
+      case response.status_code
+      when 200, 201
+        # Parse successful response
+        payment_result = JSON.parse(response.body)
+        
+        # Save to database (optional)
+        payment = Payment.create(
+          amount: payment_data["amount"],
+          currency: payment_data["currency"],
+          external_id: payment_result["id"]?.to_s,
+          status: payment_result["status"]?.to_s || "pending"
+        )
+        
+        # Return using json_post helper (201 Created)
+        json_post({
+          "id" => payment.id,
+          "amount" => payment.amount,
+          "currency" => payment.currency,
+          "status" => payment.status,
+          "external_response" => payment_result
+        })
+      when 400
+        error_data = JSON.parse(response.body)
+        bad_request("Payment failed", {
+          "details" => error_data
+        })
+      when 401
+        unauthorized("Invalid API credentials")
+      else
+        internal_server_error("Payment service error")
+      end
+    rescue ex : HTTP::Client::Error
+      internal_server_error("Network error: #{ex.message}")
+    rescue ex
+      internal_server_error("Unexpected error: #{ex.message}")
+    end
+  end
+end
+
+KothariAPI::ControllerRegistry.register("payments", PaymentController)
+```
+
+### Example: Fetching Multiple APIs and Aggregating Data
+
+```crystal
+require "http/client"
+require "json"
+
+class DashboardController < KothariAPI::Controller
+  # GET /dashboard
+  # Fetches data from multiple APIs and combines them
+  def index
+    begin
+      # Fetch from multiple APIs in parallel (using fibers)
+      user_data = fetch_user_data
+      stats_data = fetch_statistics
+      notifications = fetch_notifications
+      
+      # Combine all data
+      dashboard_data = {
+        "user" => user_data,
+        "statistics" => stats_data,
+        "notifications" => notifications,
+        "timestamp" => Time.utc.to_s
+      }
+      
+      # Return using json_get helper (200 OK)
+      json_get(dashboard_data)
+    rescue ex
+      internal_server_error("Failed to load dashboard: #{ex.message}")
+    end
+  end
+  
+  private def fetch_user_data
+    response = HTTP::Client.get(
+      "https://api.example.com/user",
+      headers: HTTP::Headers{"Authorization" => "Bearer #{get_auth_token}"}
+    )
+    JSON.parse(response.body) if response.status_code == 200
+  end
+  
+  private def fetch_statistics
+    response = HTTP::Client.get("https://api.example.com/stats")
+    JSON.parse(response.body) if response.status_code == 200
+  end
+  
+  private def fetch_notifications
+    response = HTTP::Client.get(
+      "https://api.example.com/notifications",
+      headers: HTTP::Headers{"Authorization" => "Bearer #{get_auth_token}"}
+    )
+    JSON.parse(response.body) if response.status_code == 200
+  end
+  
+  private def get_auth_token
+    # Extract token from request headers
+    context.request.headers["Authorization"]?.try &.lchop("Bearer ").strip || ""
+  end
+end
+
+KothariAPI::ControllerRegistry.register("dashboard", DashboardController)
+```
+
+### Example: Updating External Resource
+
+```crystal
+require "http/client"
+require "json"
+
+class SyncController < KothariAPI::Controller
+  # PATCH /sync/:id
+  # Updates a resource in external API and local database
+  def update
+    id = params["id"]?.try &.to_i?
+    return bad_request("ID required") unless id
+    
+    attrs = permit_body("name", "status")
+    
+    begin
+      # Update external API first
+      update_data = {
+        "name" => attrs["name"]?.to_s || "",
+        "status" => attrs["status"]?.to_s || ""
+      }
+      
+      response = HTTP::Client.patch(
+        "https://api.example.com/resources/#{id}",
+        headers: HTTP::Headers{
+          "Content-Type" => "application/json",
+          "Authorization" => "Bearer #{ENV["API_KEY"]?}"
+        },
+        body: update_data.to_json
+      )
+      
+      unless response.status_code == 200
+        return unprocessable_entity("Failed to update external resource")
+      end
+      
+      # Update local database
+      external_data = JSON.parse(response.body)
+      local_resource = Resource.find(id)
+      
+      if local_resource && Resource.update(id, {
+        "name" => JSON::Any.new(external_data["name"]?.to_s || ""),
+        "status" => JSON::Any.new(external_data["status"]?.to_s || ""),
+        "synced_at" => JSON::Any.new(Time.utc.to_s)
+      })
+        # Return using json_update helper (200 OK)
+        json_update(Resource.find(id))
+      else
+        unprocessable_entity("Failed to update local resource")
+      end
+    rescue ex
+      internal_server_error("Sync error: #{ex.message}")
+    end
+  end
+end
+
+KothariAPI::ControllerRegistry.register("sync", SyncController)
+```
+
+### Example: DELETE from External API
+
+```crystal
+require "http/client"
+
+class ResourceController < KothariAPI::Controller
+  # DELETE /resources/:id
+  # Deletes resource from external API and local database
+  def destroy
+    id = params["id"]?.try &.to_i?
+    return bad_request("ID required") unless id
+    
+    begin
+      # Delete from external API
+      response = HTTP::Client.delete(
+        "https://api.example.com/resources/#{id}",
+        headers: HTTP::Headers{"Authorization" => "Bearer #{ENV["API_KEY"]?}"}
+      )
+      
+      unless response.status_code == 200 || response.status_code == 204
+        return internal_server_error("Failed to delete from external API")
+      end
+      
+      # Delete from local database
+      if Resource.delete(id)
+        # Return using json_delete helper (200 OK with message)
+        json_delete({message: "Resource deleted successfully"})
+      else
+        internal_server_error("Failed to delete local resource")
+      end
+    rescue ex
+      internal_server_error("Delete error: #{ex.message}")
+    end
+  end
+end
+
+KothariAPI::ControllerRegistry.register("resources", ResourceController)
+```
+
+### Best Practices for API Fetching
+
+1. **Always handle errors**: Wrap API calls in `begin/rescue` blocks
+2. **Use appropriate JSON helpers**: Choose the right helper based on the operation
+3. **Set proper headers**: Include authentication and content-type headers
+4. **Validate responses**: Check status codes before processing
+5. **Parse JSON safely**: Handle JSON parsing errors gracefully
+6. **Use environment variables**: Store API keys in environment variables, not in code
+
+### Complete Example: Weather API Proxy
+
+```crystal
+require "http/client"
+require "json"
+
+class WeatherController < KothariAPI::Controller
+  # GET /weather
+  # Proxies weather API with caching
+  def index
+    city = params["city"]?.to_s
+    return bad_request("City parameter required") unless city
+    
+    # Check cache first (optional)
+    cached = WeatherCache.find_by_city(city)
+    if cached && !cached.expired?
+      return json_get(cached.data)
+    end
+    
+    begin
+      # Fetch from external API
+      api_key = ENV["WEATHER_API_KEY"]? || raise "WEATHER_API_KEY not set"
+      
+      response = HTTP::Client.get(
+        "https://api.openweathermap.org/data/2.5/weather?q=#{city}&appid=#{api_key}",
+        headers: HTTP::Headers{"Accept" => "application/json"}
+      )
+      
+      case response.status_code
+      when 200
+        weather_data = JSON.parse(response.body)
+        
+        # Cache the result (optional)
+        WeatherCache.create_or_update(city, weather_data)
+        
+        # Return using json_get helper
+        json_get(weather_data)
+      when 404
+        not_found("City not found")
+      when 401
+        unauthorized("Invalid API key")
+      else
+        internal_server_error("Weather service unavailable")
+      end
+    rescue ex : KeyError
+      internal_server_error("API key not configured")
+    rescue ex : HTTP::Client::Error
+      internal_server_error("Network error: #{ex.message}")
+    rescue ex
+      internal_server_error("Unexpected error: #{ex.message}")
+    end
+  end
+end
+
+KothariAPI::ControllerRegistry.register("weather", WeatherController)
 ```
 
 ## Examples
@@ -477,6 +1455,114 @@ kothari g scaffold product \
 
 kothari db:migrate
 kothari server
+```
+
+## Production Readiness
+
+KothariAPI is designed with production use in mind:
+
+### Security Features
+
+- **SQL Injection Protection**: All database queries use parameterized statements
+- **Strong Parameters**: Built-in support for whitelisting allowed parameters
+- **Type Safety**: Crystal's type system prevents many runtime errors
+- **Error Handling**: Comprehensive error handling with proper HTTP status codes
+
+### Performance
+
+- **Compiled Language**: Crystal compiles to native code for maximum performance
+- **Efficient Database Queries**: Uses parameterized queries and connection pooling
+- **Minimal Overhead**: Lightweight framework with minimal abstraction layers
+
+### Best Practices
+
+1. **Always use strong parameters** (`permit_body`, `permit_params`) to prevent mass assignment
+2. **Handle errors gracefully** using the provided error response helpers
+3. **Use appropriate HTTP status codes** with the JSON helper methods
+4. **Validate input** before processing requests
+5. **Use transactions** for complex database operations (when needed)
+
+### Example: Production-Ready Controller
+
+```crystal
+class PostsController < KothariAPI::Controller
+  def index
+    json_get(Post.all)
+  end
+
+  def show
+    id = params["id"]?.try &.to_i?
+    return bad_request("Invalid ID") unless id
+    
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    json_get(post)
+  end
+
+  def create
+    attrs = permit_body("title", "content", "published")
+    
+    # Validate required fields
+    unless attrs["title"]?
+      return unprocessable_entity("Title is required")
+    end
+    
+    begin
+      post = Post.create(
+        title: attrs["title"].to_s,
+        content: attrs["content"]?.to_s || "",
+        published: attrs["published"]?.as_bool? || false
+      )
+      json_post(post)
+    rescue ex
+      unprocessable_entity("Failed to create post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
+  end
+
+  def update
+    id = params["id"]?.try &.to_i?
+    return bad_request("Invalid ID") unless id
+    
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    attrs = permit_body("title", "content", "published")
+    begin
+      if Post.update(id, attrs)
+        json_update(Post.find(id))
+      else
+        unprocessable_entity("Failed to update post")
+      end
+    rescue ex
+      unprocessable_entity("Failed to update post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
+  end
+
+  def destroy
+    id = params["id"]?.try &.to_i?
+    return bad_request("Invalid ID") unless id
+    
+    post = Post.find(id)
+    return not_found("Post not found") unless post
+    
+    begin
+      if Post.delete(id)
+        json_delete({message: "Post deleted successfully"})
+      else
+        internal_server_error("Failed to delete post")
+      end
+    rescue ex
+      internal_server_error("Failed to delete post", {
+        "details" => JSON::Any.new(ex.message || "Unknown error")
+      })
+    end
+  end
+end
 ```
 
 ## Development

@@ -123,6 +123,7 @@ if ARGV[0]? == "new"
   system "mkdir -p #{app_name}/app/controllers"
   system "mkdir -p #{app_name}/app/models"
   system "mkdir -p #{app_name}/config"
+  system "mkdir -p #{app_name}/config/initializers"
   system "mkdir -p #{app_name}/src"
   system "mkdir -p #{app_name}/db/migrations"
 
@@ -160,6 +161,68 @@ KothariAPI::Router::Router.draw do |r|
 end
 ROUTES
 
+  # CORS configuration (like Rails config/initializers/cors.rb)
+  File.write "#{app_name}/config/initializers/cors.cr", <<-CORS
+# CORS (Cross-Origin Resource Sharing) Configuration
+#
+# This file controls which applications/domains are allowed to access your API.
+# CORS is a security feature that prevents unauthorized websites from making
+# requests to your API from a browser.
+
+KothariAPI::CORS.configure(
+  # allowed_origins: List of domains that can access your API
+  #   - Use specific domains: ["https://example.com", "https://app.example.com"]
+  #   - Use "*" to allow all origins (NOT recommended for production)
+  #   - Leave empty [] to disable CORS
+  allowed_origins: [
+    "http://localhost:3000",
+    "http://localhost:5173",  # Vite default port
+    "http://localhost:8080",  # Vue CLI default port
+    # Add your production domains here:
+    # "https://yourdomain.com",
+    # "https://app.yourdomain.com"
+  ],
+
+  # allowed_methods: HTTP methods that are allowed
+  #   - GET: Fetch data
+  #   - POST: Create new resources
+  #   - PUT: Update entire resource
+  #   - PATCH: Partially update resource
+  #   - DELETE: Delete resource
+  #   - OPTIONS: Preflight request (required for CORS)
+  allowed_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+
+  # allowed_headers: Request headers that clients can send
+  #   - Content-Type: Required for JSON requests
+  #   - Authorization: Required for JWT/auth tokens
+  #   - Accept: What content types the client accepts
+  #   - Add custom headers your API needs
+  allowed_headers: [
+    "Content-Type",
+    "Authorization",
+    "Accept",
+    "X-Requested-With"
+  ],
+
+  # exposed_headers: Response headers that clients can read
+  #   - These headers are made available to JavaScript in the browser
+  #   - Leave empty [] if you don't need to expose custom headers
+  exposed_headers: [],
+
+  # max_age: How long (in seconds) browsers can cache preflight responses
+  #   - 3600 = 1 hour (default)
+  #   - Higher values reduce preflight requests but increase cache time
+  #   - Set to 0 to disable caching
+  max_age: 3600,
+
+  # allow_credentials: Whether to allow cookies/auth headers
+  #   - true: Allows cookies and authentication headers (use with specific origins)
+  #   - false: More secure, doesn't allow credentials (default)
+  #   - If true, you CANNOT use "*" for allowed_origins
+  allow_credentials: false
+)
+CORS
+
   # HomeController
   File.write "#{app_name}/app/controllers/home_controller.cr", <<-CTRL
 class HomeController < KothariAPI::Controller
@@ -193,6 +256,7 @@ require "kothari_api"
 require "../app/controllers"
 require "../app/models"
 require "../config/routes"
+require "../config/initializers/cors"
 require "http/server"
 require "mime"
 
@@ -201,8 +265,14 @@ KothariAPI::DB.connect("db/development.sqlite3")
 
 server = HTTP::Server.new do |context|
   begin
+    # Handle CORS preflight requests (OPTIONS)
+    if KothariAPI::CORS.handle_preflight(context)
+      next
+    end
+
     method = context.request.method.to_s.upcase
     path = context.request.path
+    origin = context.request.headers["Origin"]?
     
     # Serve static files from public directory
     if path.starts_with?("/uploads/")
@@ -222,13 +292,17 @@ server = HTTP::Server.new do |context|
         next
       end
     else
-      route = KothariAPI::Router::Router.match(method, path)
+      # Use match_with_params to extract path parameters (e.g., :id from /posts/:id)
+      match_result = KothariAPI::Router::Router.match_with_params(method, path)
 
-      if route
+      if match_result
+        route, path_params = match_result
         controller_class = KothariAPI::ControllerRegistry.lookup(route.controller)
 
         if controller_class
           controller = controller_class.new(context)
+          # Merge path parameters into controller's params
+          controller.merge_path_params(path_params)
           controller.send(route.action)
         else
           context.response.status = HTTP::Status::INTERNAL_SERVER_ERROR
@@ -236,15 +310,23 @@ server = HTTP::Server.new do |context|
         end
       else
         context.response.status = HTTP::Status::NOT_FOUND
+        context.response.content_type = "application/json"
         context.response.print({error: "Not Found"}.to_json)
       end
     end
+
+    # Apply CORS headers to all responses
+    KothariAPI::CORS.apply_headers(context, origin)
   rescue ex
     STDERR.puts "Unhandled error: \#{ex.message}"
     ex.backtrace?.try &.each { |ln| STDERR.puts ln }
     context.response.status = HTTP::Status::INTERNAL_SERVER_ERROR
     context.response.content_type = "application/json"
     context.response.print({error: "Internal Server Error"}.to_json)
+    
+    # Apply CORS headers even on errors
+    origin = context.request.headers["Origin"]?
+    KothariAPI::CORS.apply_headers(context, origin)
   end
 end
 
@@ -546,8 +628,10 @@ loop do
     elsif cmd.includes?(".where(")
       # Handle: Session.where("live = 1") or Session.where('live = 1')
       name = cmd.split(".").first.strip.downcase
-      # Improved regex to handle both single and double quotes, with optional whitespace
-      condition_match = cmd.match(/\.where\s*\(\s*["']([^"']+)["']\s*\)/)
+      # Improved regex to handle both single and double quotes with optional whitespace
+      # This pattern handles: .where("..."), .where('...'), .where( "..."), etc.
+      # Try double quotes first, then single quotes
+      condition_match = cmd.match(/\\.where\\s*\\(\\s*"([^"]+)"\\s*\\)/) || cmd.match(/\\.where\\s*\\(\\s*'([^']+)'\\s*\\)/)
       
       if condition_match
         condition = condition_match[1]
@@ -572,8 +656,9 @@ loop do
     elsif cmd.includes?(".find(")
       # Handle: Session.find(1) or session.find(1)
       name = cmd.split(".").first.strip.downcase
-      # Improved regex to handle optional whitespace
-      id_match = cmd.match(/\.find\s*\(\s*(\d+)\s*\)/)
+      # Improved regex to handle optional whitespace and extract digits even with quotes
+      # This handles: .find(1), .find( 1 ), .find("1"), .find('1'), etc.
+      id_match = cmd.match(/\\.find\\s*\\(\\s*["']?(\\d+)["']?\\s*\\)/)
       
       if id_match
         id = id_match[1].to_i
@@ -815,11 +900,22 @@ if ARGV[0]? == "g" && ARGV[1]? == "migration"
     "#{key} #{sql_type}"
   end.join(", ")
 
+  # Derive the actual table name.
+  # Convention: if the migration name starts with "create_",
+  # use the remainder as the table name (e.g. "create_posts" -> "posts").
+  # Otherwise, use the name as-is.
+  table_name =
+    if name.starts_with?("create_")
+      name.sub(/^create_/, "")
+    else
+      name
+    end
+
   # Add timestamps to all tables
   timestamp_columns = ",\n  created_at TEXT DEFAULT CURRENT_TIMESTAMP,\n  updated_at TEXT DEFAULT CURRENT_TIMESTAMP"
   
   File.write filename, <<-SQL
-CREATE TABLE IF NOT EXISTS #{name} (
+CREATE TABLE IF NOT EXISTS #{table_name} (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   #{columns_sql}#{timestamp_columns}
 );
@@ -1281,56 +1377,102 @@ class #{controller_klass} < KothariAPI::Controller
   # GET /#{plural}
   # Lists all #{class_name} records as JSON.
   def index
-    json(#{class_name}.all)
+    json_get(#{class_name}.all)
   end
 
   # GET /#{plural}/:id
-  # NOTE: Path params are not yet wired; you can fetch by query param
-  # e.g. /#{name}s?id=1 for now.
+  # Shows a single #{class_name} record by ID.
   def show
     id = params["id"]?.try &.to_i?
     if id && (record = #{class_name}.find(id))
-      json(record)
+      json_get(record)
     else
-      context.response.status = HTTP::Status::NOT_FOUND
-      json({ error: "Not Found" })
+      not_found("#{class_name} not found")
     end
   end
 
-  # POST /#{name}s
+  # POST /#{plural}
   # Creates a new #{class_name} from JSON body using strong params.
   def create
     attrs = #{singular}_params
-    record = #{class_name}.create(
-      #{fields.map do |f|
-          key, type = f.split(":")
-          crystal_type = case type.downcase
-                         when "int", "integer" then "attrs[\"#{key}\"].as_i? || attrs[\"#{key}\"].to_s.to_i"
-                         when "bigint", "int64" then "attrs[\"#{key}\"].as_i64? || attrs[\"#{key}\"].to_s.to_i64"
-                         when "float", "double" then "attrs[\"#{key}\"].as_f? || attrs[\"#{key}\"].to_s.to_f"
-                         when "bool", "boolean" then "attrs[\"#{key}\"].as_bool? || attrs[\"#{key}\"].to_s == \"true\""
-                         when "json", "json::any" then "attrs[\"#{key}\"].as_h? || JSON.parse(attrs[\"#{key}\"].to_s)"
-                         when "time", "datetime", "timestamp" then "Time.parse(attrs[\"#{key}\"].to_s, \"%Y-%m-%d %H:%M:%S\", Time::Location::UTC)"
-                         when "uuid" then "attrs[\"#{key}\"].to_s"
-                         else
-                           "attrs[\"#{key}\"].to_s"
-                         end
-          "#{key}: #{crystal_type}"
-        end.join(",\n      ")}
-    )
-
-    context.response.status = HTTP::Status::CREATED
-    json(record)
+    begin
+      record = #{class_name}.create(
+        #{fields.map do |f|
+            key, type = f.split(":")
+            crystal_type = case type.downcase
+                           when "int", "integer" then "attrs[\"#{key}\"].as_i? || attrs[\"#{key}\"].to_s.to_i"
+                           when "bigint", "int64" then "attrs[\"#{key}\"].as_i64? || attrs[\"#{key}\"].to_s.to_i64"
+                           when "float", "double" then "attrs[\"#{key}\"].as_f? || attrs[\"#{key}\"].to_s.to_f"
+                           when "bool", "boolean" then "attrs[\"#{key}\"].as_bool? || attrs[\"#{key}\"].to_s == \"true\""
+                           when "json", "json::any" then "attrs[\"#{key}\"].as_h? || JSON.parse(attrs[\"#{key}\"].to_s)"
+                           when "time", "datetime", "timestamp" then "Time.parse(attrs[\"#{key}\"].to_s, \"%Y-%m-%d %H:%M:%S\", Time::Location::UTC)"
+                           when "uuid" then "attrs[\"#{key}\"].to_s"
+                           else
+                             "attrs[\"#{key}\"].to_s"
+                           end
+            "#{key}: #{crystal_type}"
+          end.join(",\n        ")}
+      )
+      json_post(record)
+    rescue ex
+      unprocessable_entity("Failed to create #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+    end
   end
 
   # PATCH/PUT /#{plural}/:id
-  # TODO: Implement update by id (e.g. with raw SQL).
+  # Updates a #{class_name} record by ID.
   def update
-    json({ message: "update not implemented yet" })
+    id = params["id"]?.try &.to_i?
+    unless id
+      bad_request("ID parameter required")
+      return
+    end
+    
+    record = #{class_name}.find(id)
+    unless record
+      not_found("#{class_name} not found")
+      return
+    end
+    
+    attrs = #{singular}_params
+    begin
+      # Update record using raw SQL (models need to implement update method)
+      updated = #{class_name}.update(id, attrs)
+      if updated
+        json_update(#{class_name}.find(id))
+      else
+        unprocessable_entity("Failed to update #{class_name}")
+      end
+    rescue ex
+      unprocessable_entity("Failed to update #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+    end
   end
 
   # DELETE /#{plural}/:id
-  # TODO: Implement destroy by id.
+  # Deletes a #{class_name} record by ID.
+  def destroy
+    id = params["id"]?.try &.to_i?
+    unless id
+      bad_request("ID parameter required")
+      return
+    end
+    
+    record = #{class_name}.find(id)
+    unless record
+      not_found("#{class_name} not found")
+      return
+    end
+    
+    begin
+      if #{class_name}.delete(id)
+        json_delete({message: "#{class_name} deleted successfully"})
+      else
+        internal_server_error("Failed to delete #{class_name}")
+      end
+    rescue ex
+      internal_server_error("Failed to delete #{class_name}", {"details" => JSON::Any.new(ex.message || "Unknown error")})
+    end
+  end
   def destroy
     json({ message: "destroy not implemented yet" })
   end
@@ -1420,14 +1562,30 @@ end
 # kothari console
 # ===============================================
 if ARGV[0]? == "console"
+  show_intro("console")
   # Delegate to the app's console entrypoint which we generated as
   # `console.cr` in the app root.
-  if File.exists?("console.cr")
-    system "crystal run console.cr"
-  else
-    puts "No console.cr found. Are you in a KothariAPI app directory?"
+  unless File.exists?("console.cr")
+    puts "\e[31m✗ Error: console.cr not found\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app directory.\e[0m\n"
+    exit 1
   end
-  exit 0
+  
+  # Check if shards are installed
+  unless File.exists?("lib") || Dir.exists?("lib")
+    puts "\e[33m⚠ Warning: lib directory not found. Running 'shards install'...\e[0m"
+    system "shards install"
+    unless $?.success?
+      puts "\e[31m✗ Error: Failed to install shards\e[0m"
+      puts "\e[33mPlease run 'shards install' manually and try again.\e[0m\n"
+      exit 1
+    end
+  end
+  
+  # Run console with proper shard context
+  # Use crystal run which automatically loads shards from shard.yml
+  system "crystal run console.cr"
+  exit $?.success? ? 0 : 1
 end
 
 # ===============================================
@@ -1485,6 +1643,332 @@ if ARGV[0]? == "routes"
     puts "\e[33mTotal: \e[36m#{routes.size}\e[33m route(s)\e[0m"
   end
   
+  puts ""
+  exit 0
+end
+
+# ===============================================
+# kothari document
+# ===============================================
+if ARGV[0]? == "document"
+  show_intro("document")
+  
+  unless File.exists?("config/routes.cr")
+    puts "\e[31m✗ Error: config/routes.cr not found\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app directory.\e[0m\n"
+    exit 1
+  end
+
+  unless File.exists?("README.md")
+    # Auto-create README.md if missing
+    File.write("README.md", "# #{File.basename(Dir.current)}\n\nA KothariAPI application.\n")
+    puts "\e[33m⚠ README.md not found. Created a basic README.md.\e[0m"
+  end
+
+  # Parse routes file
+  routes_content = File.read("config/routes.cr")
+  routes = [] of Tuple(String, String, String, String) # method, path, controller, action
+  
+  route_pattern = /r\.(get|post|put|patch|delete)\s+"([^"]+)",\s+to:\s+"([^"]+)"/
+  routes_content.scan(route_pattern) do |match|
+    method = match[1].upcase
+    path = match[2]
+    controller_action = match[3]
+    parts = controller_action.split("#")
+    controller = parts[0]
+    action = parts[1]? || "index"
+    routes << {method, path, controller, action}
+  end
+
+  if routes.empty?
+    puts "\e[33m⚠ No routes found in config/routes.cr\e[0m"
+    exit 0
+  end
+
+  # Build documentation
+  doc_sections = [] of String
+  
+  # Group routes by controller
+  routes_by_controller = {} of String => Array(Tuple(String, String, String, String))
+  routes.each do |route|
+    method, path, controller, action = route
+    routes_by_controller[controller] ||= [] of Tuple(String, String, String, String)
+    routes_by_controller[controller] << route
+  end
+
+  # Generate documentation for each controller
+  routes_by_controller.each do |controller_name, controller_routes|
+    # Find controller file
+    controller_path = nil
+    possible_paths = [
+      "app/controllers/#{controller_name}_controller.cr",
+      "app/controllers/#{controller_name}.cr",
+    ]
+    possible_paths.each do |path|
+      if File.exists?(path)
+        controller_path = path
+        break
+      end
+    end
+    
+    # Get model name from controller
+    model_name = if controller_name.ends_with?("s")
+      controller_name[0..-2]
+    else
+      controller_name
+    end
+    
+    # Find model fields
+    model_fields = {} of String => String
+    if model_name
+      model_path = "app/models/#{model_name.downcase}.cr"
+      if File.exists?(model_path)
+        model_content = File.read(model_path)
+        
+        # Extract property declarations
+        property_pattern = /property\s+(\w+)\s*:\s*([\w:?]+)/
+        model_content.scan(property_pattern) do |match|
+          field_name = match[1]
+          field_type = match[2]
+          model_fields[field_name] = field_type
+        end
+        
+        # Also check for instance variables in initialize
+        ivar_pattern = /@(\w+)\s*:\s*([\w:?]+)/
+        model_content.scan(ivar_pattern) do |match|
+          field_name = match[1]
+          next if field_name == "errors" # Skip errors field
+          field_type = match[2]
+          model_fields[field_name] = field_type unless model_fields.has_key?(field_name)
+        end
+      end
+    end
+    
+    doc_sections << "### #{controller_name.capitalize} Endpoints\n"
+    
+    controller_routes.each do |route|
+      method, path, _, action = route
+      
+      # Extract parameters from controller
+      params = [] of String
+      if controller_path && File.exists?(controller_path)
+        controller_content = File.read(controller_path)
+        
+        # Look for permit_body calls in the action
+        action_pattern = Regex.new("def\\s+#{action}.*?end", Regex::Options::MULTILINE)
+        if action_match = controller_content.match(action_pattern)
+          action_code = action_match[0]
+          
+          # Extract permit_body parameters
+          permit_body_pattern = /permit_body\s*\(\s*([^)]+)\s*\)/
+          if permit_match = action_code.match(permit_body_pattern)
+            params_str = permit_match[1]
+            # Extract quoted strings
+            params_str.scan(/"([^"]+)"/) do |param_match|
+              params << param_match[1]
+            end
+          end
+          
+          # Extract permit_params parameters
+          permit_params_pattern = /permit_params\s*\(\s*([^)]+)\s*\)/
+          if permit_match = action_code.match(permit_params_pattern)
+            params_str = permit_match[1]
+            params_str.scan(/"([^"]+)"/) do |param_match|
+              params << param_match[1]
+            end
+          end
+          
+          # Extract parameters from json_body patterns (for auth endpoints)
+          # Look for patterns like: data["email"], data["password"], etc.
+          json_body_pattern = /(?:data|json_body)\["(\w+)"\]/
+          action_code.scan(json_body_pattern) do |param_match|
+            param_name = param_match[1]
+            params << param_name unless params.includes?(param_name)
+          end
+          
+          # Check for path parameters (e.g., :id)
+          if action_code.includes?("params[\"id\"]")
+            params << "id" unless params.includes?("id")
+          end
+        end
+      end
+      
+      # Add path parameters
+      path.scan(/:(\w+)/) do |param_match|
+        param_name = param_match[1]
+        params << param_name unless params.includes?(param_name)
+      end
+      
+      # Build endpoint documentation
+      doc_sections << "#### `#{method} #{path}`\n"
+      doc_sections << "\n**Action:** `#{controller_name}##{action}`\n\n"
+      
+      # Parameters
+      if params.any?
+        doc_sections << "**Parameters:**\n\n"
+        params.each do |param|
+          is_path_param = path.includes?(":#{param}")
+          param_type = if model_fields.has_key?(param)
+            model_fields[param]
+          elsif param == "id"
+            "Int64"
+          else
+            "String"
+          end
+          
+          if is_path_param
+            doc_sections << "- `#{param}` (path, #{param_type}) - Required path parameter\n"
+          elsif method == "GET"
+            doc_sections << "- `#{param}` (query, #{param_type}) - Optional query parameter\n"
+          else
+            doc_sections << "- `#{param}` (body, #{param_type}) - Required in request body\n"
+          end
+        end
+        doc_sections << "\n"
+      end
+      
+      # Request example
+      if method == "POST" || method == "PUT" || method == "PATCH"
+        request_body_parts = [] of String
+        params.each do |param|
+          next if path.includes?(":#{param}") # Skip path params
+          case model_fields[param]?
+          when "String", "String?"
+            request_body_parts << "\"#{param}\": \"example_#{param}\""
+          when "Int32", "Int32?", "Int64", "Int64?"
+            request_body_parts << "\"#{param}\": 1"
+          when "Bool", "Bool?"
+            request_body_parts << "\"#{param}\": true"
+          when "Float64", "Float64?"
+            request_body_parts << "\"#{param}\": 1.0"
+          else
+            request_body_parts << "\"#{param}\": \"value\""
+          end
+        end
+        
+        if request_body_parts.any?
+          doc_sections << "**Request Example:**\n\n"
+          doc_sections << "```json\n"
+          doc_sections << "{\n  " + request_body_parts.join(",\n  ") + "\n}\n"
+          doc_sections << "```\n\n"
+        end
+      end
+      
+      # Response example
+      if model_fields.any?
+        doc_sections << "**Response Example:**\n\n"
+        doc_sections << "```json\n"
+        
+        response_body_parts = [] of String
+        model_fields.each do |field, type|
+          case type
+          when "String", "String?"
+            response_body_parts << "\"#{field}\": \"example_#{field}\""
+          when "Int32", "Int32?", "Int64", "Int64?"
+            response_body_parts << "\"#{field}\": 1"
+          when "Bool", "Bool?"
+            response_body_parts << "\"#{field}\": true"
+          when "Float64", "Float64?"
+            response_body_parts << "\"#{field}\": 1.0"
+          else
+            response_body_parts << "\"#{field}\": null"
+          end
+        end
+        
+        doc_sections << "{\n  " + response_body_parts.join(",\n  ") + "\n}\n"
+        doc_sections << "```\n\n"
+      end
+      
+      doc_sections << "---\n\n"
+    end
+  end
+
+  # Generate full documentation
+  full_doc = <<-DOC
+## API Documentation
+
+> **Note:** This documentation is auto-generated. Run `kothari document` to update it.
+
+#{doc_sections.join}
+
+DOC
+
+  # Print to terminal
+  puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
+  puts "\e[32m║                  API DOCUMENTATION                       ║\e[0m"
+  puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
+  puts ""
+  
+  routes_by_controller.each do |controller_name, controller_routes|
+    puts "\e[33m#{controller_name.capitalize} Endpoints:\e[0m"
+    controller_routes.each do |route|
+      method, path, _, action = route
+      method_color = case method
+                    when "GET"    then "\e[32m"
+                    when "POST"   then "\e[33m"
+                    when "PUT"    then "\e[34m"
+                    when "PATCH"  then "\e[35m"
+                    when "DELETE" then "\e[31m"
+                    else               "\e[0m"
+                    end
+      
+      puts "  #{method_color}#{method.ljust(6)}\e[0m #{path.ljust(30)} #{controller_name}##{action}"
+    end
+    puts ""
+  end
+
+  # Update README.md
+  readme_content = File.read("README.md")
+  
+  # Find or create API Documentation section
+  doc_start_marker = "## API Documentation"
+  
+  if readme_content.includes?(doc_start_marker)
+    # Replace existing documentation section
+    lines = readme_content.lines
+    start_idx = nil
+    end_idx = nil
+    
+    lines.each_with_index do |line, idx|
+      if line.strip == doc_start_marker && start_idx.nil?
+        start_idx = idx
+      elsif start_idx && line.starts_with?("## ") && line.strip != doc_start_marker && idx > start_idx
+        end_idx = idx
+        break
+      end
+    end
+    
+    if start_idx
+      # Remove old documentation including the header line
+      if end_idx
+        lines = lines[0...start_idx] + lines[end_idx..-1]
+      else
+        lines = lines[0...start_idx]
+      end
+      
+      # Insert new documentation (which includes the header)
+      new_lines = full_doc.lines
+      lines = lines[0..start_idx] + new_lines + lines[start_idx..-1]
+      readme_content = lines.join("\n")
+    else
+      # Fallback: append at end
+      readme_content += "\n\n#{full_doc}"
+    end
+  else
+    # Add documentation section before License or Support, or at the end
+    if readme_content.includes?("## License")
+      readme_content = readme_content.sub("## License", "#{full_doc}## License")
+    elsif readme_content.includes?("## Support")
+      readme_content = readme_content.sub("## Support", "#{full_doc}## Support")
+    else
+      readme_content += "\n\n#{full_doc}"
+    end
+  end
+  
+  File.write("README.md", readme_content)
+  
+  puts "\e[32m✓\e[0m Documentation updated in \e[36mREADME.md\e[0m"
+  puts "\e[33mTotal: \e[36m#{routes.size}\e[33m endpoint(s) documented\e[0m"
   puts ""
   exit 0
 end
@@ -1701,6 +2185,9 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts "\e[33m🛠️  Utilities:\e[0m"
   puts "  \e[36mkothari routes\e[0m"
   puts "     List all registered routes"
+  puts ""
+  puts "  \e[36mkothari document\e[0m"
+  puts "     Generate and update API documentation in README.md"
   puts ""
   puts "  \e[36mkothari console\e[0m"
   puts "     Open an interactive console"

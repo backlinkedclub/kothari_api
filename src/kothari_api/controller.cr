@@ -19,6 +19,42 @@ module KothariAPI
       context.response.content_type = "application/json"
       context.response.print data.to_json
     end
+    
+    # JSON helpers for different HTTP methods
+    
+    # GET response - returns 200 OK with JSON data
+    def json_get(data)
+      context.response.status = HTTP::Status::OK
+      json(data)
+    end
+    
+    # POST response - returns 201 Created with JSON data
+    def json_post(data)
+      context.response.status = HTTP::Status::CREATED
+      json(data)
+    end
+    
+    # UPDATE/PATCH response - returns 200 OK with JSON data
+    def json_update(data)
+      context.response.status = HTTP::Status::OK
+      json(data)
+    end
+    
+    # PATCH response - alias for json_update
+    def json_patch(data)
+      json_update(data)
+    end
+    
+    # DELETE response - returns 200 OK with JSON data (or 204 No Content if data is nil)
+    def json_delete(data = nil)
+      if data.nil?
+        context.response.status = HTTP::Status::NO_CONTENT
+        context.response.print ""
+      else
+        context.response.status = HTTP::Status::OK
+        json(data)
+      end
+    end
 
     # Standardized error responses
     def error_response(status : HTTP::Status, message : String, details : Hash(String, JSON::Any)? = nil)
@@ -116,10 +152,19 @@ module KothariAPI
     # -------- Params & strong params --------
 
     # Query string parameters as a simple Hash(String, String).
+    # Path parameters (from routes like /posts/:id) are automatically merged in.
     def params : Hash(String, String)
       qp = context.request.query_params
       @params ||= (qp ? qp.to_h : {} of String => String)
       @params
+    end
+    
+    # Merge path parameters (from route patterns like /posts/:id) into params.
+    # This is called by the server when matching routes with path parameters.
+    def merge_path_params(path_params : Hash(String, String))
+      path_params.each do |key, value|
+        @params[key] = value
+      end
     end
 
     # Strong params for query string – only the listed keys are kept.

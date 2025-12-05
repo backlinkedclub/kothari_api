@@ -45,14 +45,45 @@
 
 ### 6. CLI Commands
 - ✅ `kothari new <app_name>` - Generate new application
-- ✅ `kothari server` - Run development server
+- ✅ `kothari server [-p|--port PORT]` - Run development server with port configuration
+- ✅ `kothari build [output] [--release]` - Compile application to binary (with release optimization)
 - ✅ `kothari g controller <name>` - Generate controller and route
 - ✅ `kothari g model <name> field:type ...` - Generate model and migration
 - ✅ `kothari g migration <name> field:type ...` - Generate migration
 - ✅ `kothari g scaffold <name> field:type ...` - Generate full CRUD scaffold
-- ✅ `kothari g auth <name>` - Generate authentication system
+- ✅ `kothari g auth [name]` - Generate authentication system
 - ✅ `kothari db:migrate` - Run migrations
 - ✅ `kothari db:reset` - Reset database and re-run migrations
+- ✅ `kothari routes` - List all registered routes in formatted table
+- ✅ `kothari console` - Interactive console for data exploration and SQL queries
+- ✅ `kothari benchmark` - Run performance benchmarks
+- ✅ `kothari help` - Display help menu with all commands
+
+### 7. Interactive Console
+- ✅ Full-featured REPL for data exploration
+- ✅ Model queries: `Model.all`, `Model.find(id)`, `Model.where(condition)`
+- ✅ Table schema inspection: `Model.show`
+- ✅ Direct SQL execution: `sql SELECT ...`, `sql INSERT ...`, etc.
+- ✅ Model registry listing: `models` command
+- ✅ Schema inspection: `sql .schema <table>`
+- ✅ Colorized output for better readability
+
+### 8. Server Features
+- ✅ Port configuration via CLI flag (`-p` or `--port`)
+- ✅ Port configuration via environment variable (`KOTHARI_PORT`)
+- ✅ Automatic port detection (finds available port if default is in use)
+- ✅ Auto-shard installation (installs dependencies if missing)
+- ✅ Static file serving from `public/` directory (for `/uploads/` paths)
+- ✅ Automatic MIME type detection for static files
+- ✅ Error handling with proper HTTP status codes
+
+### 9. Developer Experience
+- ✅ Beautiful ASCII art banners for every command
+- ✅ Dynamic command name display in banners
+- ✅ Colorized terminal output throughout CLI
+- ✅ Comprehensive help system
+- ✅ Route listing with color-coded HTTP methods
+- ✅ Performance benchmarking tool with detailed metrics
 
 ## 🔧 Technical Details
 
@@ -76,6 +107,14 @@
 - Migration tracking via `schema_migrations` table
 - Automatic timestamps (`created_at`, `updated_at`)
 - Parameterized queries to prevent SQL injection
+- Model registry for console and tooling integration
+
+### Server Configuration
+- Port configuration: CLI flag (`-p`/`--port`) or `KOTHARI_PORT` env var
+- Default port: 3000
+- Automatic port detection if default port is in use (tries up to 10 ports)
+- Static file serving from `public/` directory
+- MIME type detection for static files
 
 ## 📝 Usage Examples
 
@@ -119,6 +158,62 @@ class UsersController < KothariAPI::Controller
 end
 ```
 
+### Using the Interactive Console
+```bash
+kothari console
+```
+
+```ruby
+# List all registered models
+models
+
+# Query models
+Post.all
+Post.find(1)
+Post.where("published = 1")
+
+# Inspect table schema
+Post.show
+
+# Run SQL directly
+sql SELECT * FROM posts WHERE published = 1
+sql .schema posts
+
+# Exit
+exit
+```
+
+### Viewing Routes
+```bash
+kothari routes
+```
+
+Output shows all routes with HTTP methods, paths, and controller actions in a formatted table.
+
+### Running Benchmarks
+```bash
+# Start server first
+kothari server
+
+# In another terminal
+kothari benchmark
+```
+
+Runs performance tests and displays detailed metrics including:
+- Requests per second
+- Latency (min, avg, P50, P95, P99, max)
+- Error count
+- Duration
+
+### Building for Production
+```bash
+# Build optimized release binary
+kothari build myapp --release
+
+# Run the binary
+./myapp
+```
+
 ## 🚀 Production Checklist
 
 - ✅ All core features implemented
@@ -129,6 +224,13 @@ end
 - ✅ Password security (salted + peppered hashes)
 - ✅ JWT token support
 - ✅ Migration system with tracking
+- ✅ Interactive console for debugging and data exploration
+- ✅ Route inspection and management
+- ✅ Performance benchmarking tools
+- ✅ Production build system with release optimization
+- ✅ Static file serving
+- ✅ Port configuration and auto-detection
+- ✅ Comprehensive CLI with help system
 
 ## 📦 Dependencies
 
@@ -145,6 +247,10 @@ end
 - More validation types (uniqueness, format, etc.)
 - Database connection pooling
 - Logging/monitoring helpers
+- Additional database adapters (PostgreSQL, MySQL)
+- API versioning support
+- Rate limiting middleware
+- CORS configuration
 
 ---
 

@@ -42,8 +42,6 @@ module KothariAPI
 
     # CREATE a record
     def self.create(**fields)
-      now = Time.utc.to_s("%Y-%m-%d %H:%M:%S")
-      
       # Extract keys and values, preserving original types
       all_keys = fields.keys.map(&.to_s)
       
@@ -60,10 +58,25 @@ module KothariAPI
       sql = "INSERT INTO #{self.table} (#{keys}) VALUES (#{placeholders})"
       
       # Use exec with args parameter to properly pass the array
-      result = KothariAPI::DB.conn.exec(sql, args: all_values)
+      begin
+        result = KothariAPI::DB.conn.exec(sql, args: all_values)
+      rescue ex
+        raise "Failed to INSERT into #{self.table}: #{ex.message}"
+      end
 
       id = result.last_insert_id.to_i
-      find(id)
+      
+      # If last_insert_id is 0, something went wrong
+      if id == 0
+        raise "Failed to get last_insert_id after INSERT into #{self.table}. The INSERT may have failed silently."
+      end
+      
+      found = find(id)
+      unless found
+        raise "Failed to find record with id #{id} after INSERT into #{self.table}. The record may not have been inserted correctly."
+      end
+      
+      found
     end
 
     # FIND by id
@@ -120,6 +133,68 @@ module KothariAPI
       end
 
       record
+    end
+    
+    # UPDATE a record by ID
+    # Takes a hash of attributes to update (from JSON::Any hash)
+    def self.update(id : Int, attrs : Hash(String, JSON::Any)) : Bool
+      return false if attrs.empty?
+      
+      # Build SET clause with parameterized values
+      set_parts = [] of String
+      values = [] of ::DB::Any
+      
+      attrs.each do |key, value|
+        # Skip id field
+        next if key == "id"
+        
+        # Convert JSON::Any to appropriate DB::Any type
+        db_value = case value
+        when JSON::Any
+          case value.raw
+          when String then value.as_s
+          when Int64 then value.as_i64
+          when Int32 then value.as_i32
+          when Float64 then value.as_f64
+          when Bool then value.as_bool
+          when Nil then nil
+          when Hash then value.to_json
+          when Array then value.to_json
+          else
+            value.to_s
+          end
+        else
+          value
+        end
+        
+        set_parts << "#{key} = ?"
+        values << db_value.as(::DB::Any)
+      end
+      
+      return false if set_parts.empty?
+      
+      # Add updated_at if the table has that column (common pattern)
+      # Note: This assumes SQLite datetime format
+      sql = "UPDATE #{self.table} SET #{set_parts.join(", ")} WHERE id = ?"
+      values << id.as(::DB::Any)
+      
+      begin
+        result = KothariAPI::DB.conn.exec(sql, args: values)
+        result.rows_affected > 0
+      rescue ex
+        raise "Failed to UPDATE #{self.table}: #{ex.message}"
+      end
+    end
+    
+    # DELETE a record by ID
+    def self.delete(id : Int) : Bool
+      sql = "DELETE FROM #{self.table} WHERE id = ?"
+      begin
+        result = KothariAPI::DB.conn.exec(sql, id)
+        result.rows_affected > 0
+      rescue ex
+        raise "Failed to DELETE from #{self.table}: #{ex.message}"
+      end
     end
 
     # Convert the current row in a `DB::ResultSet` into a model
