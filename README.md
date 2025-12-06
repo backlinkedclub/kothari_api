@@ -210,6 +210,34 @@ curl -X POST http://localhost:3000/login \
   -d '{"email":"user@example.com","password":"secure123"}'
 ```
 
+#### `kothari webhook <name>`
+
+Generates a webhook controller for handling webhooks from external services (Twilio, Stripe, GitHub, etc.).
+
+```bash
+kothari webhook twilio
+```
+
+This creates `app/controllers/twilio_webhook_controller.cr`. You can then use the `webhook()` helper method to dynamically create webhook endpoints.
+
+**Example:**
+```crystal
+# In any controller
+def create
+  # Creates webhook file and route automatically
+  webhook_url = webhook(controller_name: "twilio", action_name: "incoming_call")
+  json({webhook_url: webhook_url})
+end
+```
+
+#### `kothari webhook:routes`
+
+Scans webhook controllers and automatically adds routes to `config/routes.cr`.
+
+```bash
+kothari webhook:routes
+```
+
 ### Database Commands
 
 #### `kothari db:migrate`
@@ -227,6 +255,19 @@ Drops the database, recreates it, and runs all migrations.
 ```bash
 kothari db:reset
 ```
+
+#### `kothari diagram`
+
+Generates a database schema diagram in Mermaid ER format.
+
+```bash
+kothari diagram
+```
+
+This creates `db/diagram.md` with a visual representation of all tables, fields, and relationships. The diagram can be viewed in:
+- GitHub (renders automatically)
+- VS Code (with Mermaid extension)
+- Online at https://mermaid.live
 
 ### Utility Commands
 
