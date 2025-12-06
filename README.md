@@ -2272,7 +2272,7 @@ MIT License - see LICENSE file for details
 
 ## Version
 
-Current Version: **1.0.0**
+Current Version: **2.5.0**
 
 ---
 

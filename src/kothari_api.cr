@@ -1,5 +1,5 @@
 module KothariAPI
-  VERSION = "2.0.0"
+  VERSION = "2.5.0"
 end
 
 require "./kothari_api/db"
