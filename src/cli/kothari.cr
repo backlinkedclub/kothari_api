@@ -1894,20 +1894,62 @@ if ARGV[0]? == "console"
     exit 1
   end
   
+  # Check if shard.yml exists
+  unless File.exists?("shard.yml")
+    puts "\e[31m✗ Error: shard.yml not found\e[0m"
+    puts "\e[33mMake sure you're in a KothariAPI app root directory.\e[0m\n"
+    exit 1
+  end
+  
   # Check if shards are installed
-  unless File.exists?("lib") || Dir.exists?("lib")
-    puts "\e[33m⚠ Warning: lib directory not found. Running 'shards install'...\e[0m"
-    system "shards install"
-    unless $?.success?
-      puts "\e[31m✗ Error: Failed to install shards\e[0m"
-      puts "\e[33mPlease run 'shards install' manually and try again.\e[0m\n"
+  # Also check shard.yml to see if kothari_api uses path (local development)
+  shard_yml_content = File.read("shard.yml") rescue ""
+  uses_path_dependency = shard_yml_content.includes?("path:")
+  
+  unless Dir.exists?("lib")
+    puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
+    result = system("shards install")
+    unless result && $?.success?
+      puts "\e[31m✗ Error: shards install failed\e[0m"
+      puts "\e[33mPlease run 'shards install' manually and check for errors.\e[0m\n"
+      exit 1
+    end
+  end
+  
+  # If using path dependency, verify the path exists
+  if uses_path_dependency
+    # Extract path from shard.yml
+    path_match = shard_yml_content.match(/path:\s*(.+)/)
+    if path_match
+      kothari_path = path_match[1].strip
+      # Resolve relative path
+      full_path = File.expand_path(kothari_path, Dir.current)
+      unless Dir.exists?(full_path) && File.exists?(File.join(full_path, "src", "kothari_api.cr"))
+        puts "\e[31m✗ Error: kothari_api path dependency not found\e[0m"
+        puts "\e[33mExpected path: #{full_path}\e[0m"
+        puts "\e[33mPlease check your shard.yml configuration.\e[0m\n"
+        exit 1
+      end
+    end
+  elsif !Dir.exists?("lib/kothari_api")
+    # For non-path dependencies, verify kothari_api is in lib
+    puts "\e[36m⚡ Installing shards (this may take a moment)...\e[0m"
+    result = system("shards install")
+    unless result && $?.success?
+      puts "\e[31m✗ Error: shards install failed\e[0m"
+      puts "\e[33mPlease run 'shards install' manually and check for errors.\e[0m\n"
       exit 1
     end
   end
   
   # Run console with proper shard context
   # Use crystal run which automatically loads shards from shard.yml
-  system "crystal run console.cr"
+  # Explicitly set chdir to current directory to ensure Crystal finds shards
+  Process.run("crystal", ["run", "console.cr"], 
+    chdir: Dir.current,
+    output: Process::Redirect::Inherit,
+    error: Process::Redirect::Inherit
+  )
   exit $?.success? ? 0 : 1
 end
 
