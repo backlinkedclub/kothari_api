@@ -488,7 +488,7 @@ KothariAPI::DB.connect("db/development.sqlite3")
 puts "\e[36m╔═══════════════════════════════════════════════════════════╗\e[0m"
 puts "\e[36m║           KOTHARI API CONSOLE - DATA EXPLORER             ║\e[0m"
 puts "\e[36m╚═══════════════════════════════════════════════════════════╝\e[0m"
-puts "\e[32mVersion: \e[36m2.5.0\e[0m"
+puts "\e[32mVersion: \e[36m2.6.0\e[0m"
 puts "\e[33mType 'help' for commands, 'exit' to quit.\e[0m\n"
 
 loop do
@@ -538,7 +538,7 @@ loop do
       names.each { |n| puts "  \e[36m• \#{n.capitalize}\e[0m" }
     end
   when "version"
-    puts "\e[32mKothariAPI Framework \e[36m2.5.0\e[0m"
+    puts "\e[32mKothariAPI Framework \e[36m2.6.0\e[0m"
     puts "\e[33mFor more info: https://github.com/backlinkedclub/kothari_api\e[0m"
   else
     if cmd.starts_with?("sql ")
@@ -2768,7 +2768,7 @@ if ARGV[0]? == "help" || ARGV.empty?
   puts ""
   puts "\e[32m╔═══════════════════════════════════════════════════════════╗\e[0m"
   puts "\e[32m║  For more information: https://github.com/kothari-api   ║\e[0m"
-  puts "\e[32m║  Version: \e[36m2.5.0\e[32m                                          ║\e[0m"
+  puts "\e[32m║  Version: \e[36m2.6.0\e[32m                                          ║\e[0m"
   puts "\e[32m╚═══════════════════════════════════════════════════════════╝\e[0m"
   puts ""
   exit 0
